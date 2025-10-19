@@ -81,64 +81,64 @@ export default function WhatsAppForm() {
   };
 
   // Enviar
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    if (loading) return;
+const onSubmit = async (e) => {
+  e.preventDefault();
+  if (loading) return;
 
-    // Validación requerida
-    if (!validate()) return;
+  // Validación requerida
+  if (!validate()) return;
 
-    // Construir payload correo
-    const payload = {
-      subject: "Nueva cotización desde el formulario",
-      name: nombre,
-      email: "", // si más adelante agregas email/phone en el formulario, completa aquí
-      phone: "",
-      message: `Proyecto: ${tipo}\nRubro/negocio: ${negocio}\nPresupuesto: ${presupuesto || "A definir"}\nDetalle: ${detalle}`,
-      meta: {
-        source: "WhatsAppForm",
-        url: typeof window !== "undefined" ? window.location.href : "",
-      },
-    };
-
-    const mobile = isMobile();
-
-    try {
-      setLoading(true);
-
-      // 1) Enviar correo (en móvil usar sendBeacon si existe para no bloquear la navegación)
-      if (mobile && navigator.sendBeacon) {
-        const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-        navigator.sendBeacon("/api/send", blob);
-      } else {
-        // PC o móvil sin sendBeacon → fetch normal (no bloqueante)
-        fetch("/api/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }).catch(() => {});
-      }
-
-      // 2) Abrir WhatsApp según dispositivo
-      if (mobile) {
-        // Evita la pestaña en blanco: navegar en la misma pestaña
-        localStorage.setItem("wa_last_submit", "ok");
-        window.location.href = waLink;
-      } else {
-        // PC: pestaña nueva
-        window.open(waLink, "_blank", "noopener,noreferrer");
-        // Mostrar OK aquí mismo
-        showToast("¡Enviado! Te contactaremos pronto ✅", "success", 3500);
-      }
-    } catch {
-      // Si hubo falla de red en PC, informar (en móvil probablemente ya se fue a WhatsApp)
-      if (!mobile) {
-        showToast("No pudimos enviar el correo, pero WhatsApp se abrió igual 🙌", "error", 4000);
-      }
-    } finally {
-      setLoading(false);
-    }
+  const payload = {
+    subject: "Nueva cotización desde el formulario",
+    name: nombre,
+    email: "",
+    phone: "",
+    message: `Proyecto: ${tipo}\nRubro/negocio: ${negocio}\nPresupuesto: ${presupuesto || "A definir"}\nDetalle: ${detalle}`,
+    meta: {
+      source: "WhatsAppForm",
+      url: typeof window !== "undefined" ? window.location.href : "",
+    },
   };
+
+  const mobile = isMobile();
+
+  try {
+    setLoading(true);
+
+    // ===== Enviar correo sin bloquear la navegación =====
+    if (mobile && navigator.sendBeacon) {
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      navigator.sendBeacon("/api/send", blob);
+    } else {
+      fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+
+    if (mobile) {
+      // Mostrar algo ANTES de salir a WhatsApp (lo alcanzas a ver)
+      showToast("Abriendo WhatsApp…", "success", 1200);
+      // marcar para mostrar “¡Enviado!” cuando vuelvas
+      localStorage.setItem("wa_last_submit", "ok");
+      // pequeño delay para que el toast se vea
+      setTimeout(() => {
+        window.location.href = waLink; // mismo tab (sin pestaña blanca)
+      }, 200);
+    } else {
+      // PC → nueva pestaña y feedback inmediato
+      window.open(waLink, "_blank", "noopener,noreferrer");
+      showToast("¡Enviado! Te contactaremos pronto ✅", "success", 3500);
+    }
+  } catch {
+    if (!mobile) {
+      showToast("No pudimos enviar el correo, pero WhatsApp se abrió igual 🙌", "error", 4000);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ==== Fondo animado Matrix Neón ==== (igual al tuyo, con mejoras de rendimiento)
   const canvasRef = useRef(null);
@@ -363,7 +363,7 @@ export default function WhatsAppForm() {
           position: "fixed",
           bottom: "20px",
           left: "20px",
-          zIndex: 9999,
+          zIndex: 100000,
         }}
       >
         {toast.show && (
@@ -421,7 +421,38 @@ export default function WhatsAppForm() {
           color: #fecaca; /* rojo claro para contraste */
           text-shadow: 0 0 10px rgba(239, 68, 68, 0.45);
         }
+
+
+        /* Asegura stacking correcto */
+.wa-bg { z-index: 0; pointer-events: none; }
+.wa-container { position: relative; z-index: 3; }
+.wa-form { position: relative; z-index: 4; overflow: visible; }
+
+/* Cada campo posiciona el error por encima y evita que se “meta atrás” */
+.wa-field { position: relative; margin-bottom: 28px; }
+
+/* Mensaje de error SIEMPRE visible arriba del formulario */
+.field-error {
+  position: absolute;
+  left: 8px;
+  bottom: -18px;
+  z-index: 6;                /* encima del card glass */
+  display: inline-block;
+  padding: 0 6px;
+  background: rgba(2, 6, 23, 0.85); /* plaquita oscura para contraste en móvil */
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+/* El toast nunca queda detrás (z-index muy alto) */
+#toast-portal,
+.toast-portal,
+body > div[aria-live="polite"] {
+  z-index: 100000 !important;
+}
+
       `}</style>
     </section>
   );
 }
+
