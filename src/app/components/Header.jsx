@@ -8,7 +8,9 @@ export default function Header() {
   // Bloquear scroll del body cuando el drawer está abierto (móvil)
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [open]);
 
   const scrollToTop = (e) => {
@@ -17,17 +19,16 @@ export default function Header() {
     setOpen(false);
   };
 
-  // 👉 Scroll a anchors con offset del header (para #services, #benefits, etc.)
+  // Scroll a anchors con offset del header
   const handleAnchor = (e) => {
     const href = e.currentTarget.getAttribute("href");
     if (!href || !href.startsWith("#")) return;
     e.preventDefault();
     const el = document.querySelector(href);
     if (!el) return;
-
     const header = document.querySelector("header.hdr");
     const offset = header ? header.getBoundingClientRect().height : 72;
-    const y = el.getBoundingClientRect().top + window.pageYOffset - offset - 8; // margen
+    const y = el.getBoundingClientRect().top + window.pageYOffset - offset - 8;
     window.scrollTo({ top: y, behavior: "smooth" });
     setOpen(false);
   };
@@ -46,7 +47,7 @@ export default function Header() {
   return (
     <header className="hdr" role="banner">
       <div className="row">
-        {/* Brand en caja fija (controla alto real del header) */}
+        {/* Brand en caja fija */}
         <a href="#top" aria-label="Inicio Velocity Web" onClick={scrollToTop} className="brand">
           <span className="brand-box">
             <Image
@@ -68,8 +69,9 @@ export default function Header() {
         {/* Mobile hamburger */}
         <button
           className={`hamb ${open ? "is-open" : ""}`}
-          aria-label="Abrir menú"
+          aria-label={open ? "Cerrar menú" : "Abrir menú"}
           aria-expanded={open}
+          aria-controls="mobile-drawer"
           onClick={() => setOpen((v) => !v)}
         >
           <span />
@@ -83,7 +85,12 @@ export default function Header() {
 
       {/* Overlay + Drawer */}
       <div className={`overlay ${open ? "show" : ""}`} onClick={() => setOpen(false)} />
-      <aside className={`drawer ${open ? "open" : ""}`} aria-label="Menú móvil">
+
+      <aside
+        id="mobile-drawer"
+        className={`drawer ${open ? "open" : ""}`}
+        aria-label="Menú móvil"
+      >
         <div className="drawer-head">
           <Image
             src="/brand/velocityweb-logo.png"
@@ -92,7 +99,10 @@ export default function Header() {
             height={44}
             className="drawer-brand"
           />
-          <button className="close" aria-label="Cerrar menú" onClick={() => setOpen(false)}>✕</button>
+          {/* ÚNICO botón de cerrar visible */}
+          <button className="close" aria-label="Cerrar menú" onClick={() => setOpen(false)}>
+            ✕
+          </button>
         </div>
         <nav className="drawer-nav" aria-label="Primary mobile">
           <MenuLinks />
@@ -140,7 +150,7 @@ export default function Header() {
           filter: brightness(1.48) saturate(1.2) drop-shadow(0 0 22px rgba(34,211,238,.75));
         }
 
-        /* Desktop Nav: chips premium + subrayado animado */
+        /* Desktop Nav */
         .nav { display: flex; align-items: center; gap: 0.75rem; }
         .chip {
           position: relative;
@@ -189,14 +199,27 @@ export default function Header() {
         }
 
         /* Hamburger (solo móvil) */
-        .hamb { display: none; width: 44px; height: 38px; border: none; background: transparent; position: relative; cursor: pointer; z-index: 10000; padding: 0; }
-        .hamb span { position: absolute; left: 8px; right: 8px; height: 3px; background: #eaf8ff; border-radius: 4px; transition: transform .3s ease, opacity .3s ease; }
+        .hamb {
+          display: none;
+          width: 44px; height: 38px;
+          border: none; background: transparent;
+          position: relative; cursor: pointer;
+          z-index: 10000; padding: 0;
+          transition: opacity .2s ease;
+        }
+        .hamb span {
+          position: absolute; left: 8px; right: 8px; height: 3px;
+          background: #eaf8ff; border-radius: 4px;
+          transition: transform .3s ease, opacity .3s ease;
+        }
         .hamb span:nth-child(1) { top: 10px; }
         .hamb span:nth-child(2) { top: 17px; }
         .hamb span:nth-child(3) { top: 24px; }
         .hamb.is-open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
         .hamb.is-open span:nth-child(2) { opacity: 0; }
         .hamb.is-open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+        /* 🔥 OCULTAR hamburguesa cuando el drawer está abierto para evitar “dos equis” */
+        .hamb.is-open { opacity: 0; pointer-events: none; }
 
         /* Energy line */
         .energy {
