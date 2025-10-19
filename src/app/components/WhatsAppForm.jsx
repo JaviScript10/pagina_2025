@@ -1,21 +1,22 @@
+// src/app/components/WhatsAppForm.jsx
 "use client";
+
 import { useMemo, useState, useEffect, useRef } from "react";
-import { WA_PHONE } from "../config"; // ruta relativa desde /components
+import { WA_PHONE } from "../config"; // ← ruta relativa desde /components
 
 export default function WhatsAppForm() {
   const PHONE = WA_PHONE;
 
   // Campos
   const [nombre, setNombre] = useState("");
-  const [tipo, setTipo] = useState("Landing Page");
+  const [tipo, setTipo] = useState(""); // requerido (antes tenía default, ahora forzamos elección)
   const [negocio, setNegocio] = useState("");
   const [presupuesto, setPresupuesto] = useState("");
   const [detalle, setDetalle] = useState("");
 
-  // Estado UI
+  // Estados UI
   const [loading, setLoading] = useState(false);
-
-  // Errores (neón rojo animado)
+  const [toast, setToast] = useState({ show: false, type: "success", msg: "" });
   const [errors, setErrors] = useState({
     nombre: false,
     tipo: false,
@@ -23,22 +24,31 @@ export default function WhatsAppForm() {
     detalle: false,
   });
 
-  // TOAST
-  const [toast, setToast] = useState({ show: false, type: "success", msg: "" });
-  const showToast = (msg, type = "success") => {
+  // Mostrar toast (abajo izquierda)
+  const showToast = (msg, type = "success", ms = 3000) => {
     setToast({ show: true, type, msg });
-    window.clearTimeout((showToast)._t);
-    (showToast)._t = window.setTimeout(() => {
+    window.clearTimeout(showToast._t);
+    showToast._t = window.setTimeout(() => {
       setToast((t) => ({ ...t, show: false }));
-    }, 2600);
+    }, ms);
   };
+
+  // Al volver desde WhatsApp, mostrar "Enviado" si quedó marcado
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ok = localStorage.getItem("wa_last_submit");
+    if (ok === "ok") {
+      localStorage.removeItem("wa_last_submit");
+      showToast("¡Enviado! Te contactaremos pronto ✅", "success", 3500);
+    }
+  }, []);
 
   // Link de WhatsApp
   const waLink = useMemo(() => {
     const lineas = [
       "Hola, quiero una cotización",
       nombre ? `• Nombre: ${nombre}` : null,
-      `• Proyecto: ${tipo}`,
+      tipo ? `• Proyecto: ${tipo}` : null,
       negocio ? `• Rubro/negocio: ${negocio}` : null,
       presupuesto ? `• Presupuesto: ${presupuesto}` : null,
       detalle ? `• Detalle: ${detalle}` : null,
@@ -49,7 +59,12 @@ export default function WhatsAppForm() {
     return `https://wa.me/${PHONE}?${params.toString()}`;
   }, [PHONE, nombre, tipo, negocio, presupuesto, detalle]);
 
-  // Validación
+  // Helpers
+  const isMobile = () => {
+    if (typeof navigator === "undefined") return false;
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  };
+
   const validate = () => {
     const next = {
       nombre: !nombre.trim(),
@@ -58,70 +73,74 @@ export default function WhatsAppForm() {
       detalle: !detalle.trim(),
     };
     setErrors(next);
-    // Si hay alguno true => inválido
-    return !Object.values(next).some(Boolean);
+    const any = Object.values(next).some(Boolean);
+    if (any) {
+      showToast("Completa los campos marcados en rojo ✍️", "error", 3800);
+    }
+    return !any;
   };
 
-  // “limpiar” error de un campo al escribir
-  useEffect(() => {
-    if (nombre.trim() && errors.nombre) setErrors((e) => ({ ...e, nombre: false }));
-  }, [nombre]);
-  useEffect(() => {
-    if (tipo.trim() && errors.tipo) setErrors((e) => ({ ...e, tipo: false }));
-  }, [tipo]);
-  useEffect(() => {
-    if (negocio.trim() && errors.negocio) setErrors((e) => ({ ...e, negocio: false }));
-  }, [negocio]);
-  useEffect(() => {
-    if (detalle.trim() && errors.detalle) setErrors((e) => ({ ...e, detalle: false }));
-  }, [detalle]);
-
+  // Enviar
   const onSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
 
-    // Validación previa
-    if (!validate()) {
-      showToast("Faltan campos obligatorios", "error");
-      return;
-    }
+    // Validación requerida
+    if (!validate()) return;
 
-    // 1) Abrir WhatsApp SIEMPRE en nueva pestaña
-    window.open(waLink, "_blank", "noopener,noreferrer");
+    // Construir payload correo
+    const payload = {
+      subject: "Nueva cotización desde el formulario",
+      name: nombre,
+      email: "", // si más adelante agregas email/phone en el formulario, completa aquí
+      phone: "",
+      message: `Proyecto: ${tipo}\nRubro/negocio: ${negocio}\nPresupuesto: ${presupuesto || "A definir"}\nDetalle: ${detalle}`,
+      meta: {
+        source: "WhatsAppForm",
+        url: typeof window !== "undefined" ? window.location.href : "",
+      },
+    };
 
-    // 2) Intentar enviar correo (no bloquea)
+    const mobile = isMobile();
+
     try {
       setLoading(true);
-      const res = await fetch("/api/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: "Nueva cotización desde el formulario",
-          name: nombre,
-          email: "", // si luego agregas campo email
-          phone: "", // si agregas teléfono
-          message: `Proyecto: ${tipo}\nRubro/negocio: ${negocio}\nPresupuesto: ${presupuesto || "A definir"}\nDetalle: ${detalle}`,
-          meta: {
-            source: "WhatsAppForm",
-            url: typeof window !== "undefined" ? window.location.href : "",
-          },
-        }),
-      });
 
-      // Muestra toast de éxito (PC y móvil)
-      if (res.ok) {
-        showToast("¡Enviado! Te contactaremos pronto ✅", "success");
+      // 1) Enviar correo (en móvil usar sendBeacon si existe para no bloquear la navegación)
+      if (mobile && navigator.sendBeacon) {
+        const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+        navigator.sendBeacon("/api/send", blob);
       } else {
-        showToast("No pudimos enviar el correo, pero WhatsApp se abrió ✅", "error");
+        // PC o móvil sin sendBeacon → fetch normal (no bloqueante)
+        fetch("/api/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      }
+
+      // 2) Abrir WhatsApp según dispositivo
+      if (mobile) {
+        // Evita la pestaña en blanco: navegar en la misma pestaña
+        localStorage.setItem("wa_last_submit", "ok");
+        window.location.href = waLink;
+      } else {
+        // PC: pestaña nueva
+        window.open(waLink, "_blank", "noopener,noreferrer");
+        // Mostrar OK aquí mismo
+        showToast("¡Enviado! Te contactaremos pronto ✅", "success", 3500);
       }
     } catch {
-      showToast("No pudimos enviar el correo, pero WhatsApp se abrió ✅", "error");
+      // Si hubo falla de red en PC, informar (en móvil probablemente ya se fue a WhatsApp)
+      if (!mobile) {
+        showToast("No pudimos enviar el correo, pero WhatsApp se abrió igual 🙌", "error", 4000);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Fondo animado (tu matrix neon)
+  // ==== Fondo animado Matrix Neón ==== (igual al tuyo, con mejoras de rendimiento)
   const canvasRef = useRef(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -192,6 +211,24 @@ export default function WhatsAppForm() {
     };
   }, []);
 
+  // Handlers para limpiar error de cada campo al escribir
+  const onNombre = (v) => {
+    setNombre(v);
+    if (errors.nombre && v.trim()) setErrors((e) => ({ ...e, nombre: false }));
+  };
+  const onTipo = (v) => {
+    setTipo(v);
+    if (errors.tipo && v.trim()) setErrors((e) => ({ ...e, tipo: false }));
+  };
+  const onNegocio = (v) => {
+    setNegocio(v);
+    if (errors.negocio && v.trim()) setErrors((e) => ({ ...e, negocio: false }));
+  };
+  const onDetalle = (v) => {
+    setDetalle(v);
+    if (errors.detalle && v.trim()) setErrors((e) => ({ ...e, detalle: false }));
+  };
+
   return (
     <section id="cotizar" className="wa-section" aria-labelledby="cotizar-title">
       {/* Fondo animado */}
@@ -206,33 +243,36 @@ export default function WhatsAppForm() {
 
         <form onSubmit={onSubmit} className="wa-form" noValidate>
           <div className="wa-grid">
-            {/* NOMBRE */}
-            <div className={`wa-field ${errors.nombre ? "has-error" : ""}`}>
+            {/* Nombre */}
+            <div className="wa-field">
               <label htmlFor="nombre">Tu nombre</label>
               <input
                 id="nombre"
                 type="text"
                 placeholder="Ej: Andrea"
                 value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                aria-invalid={errors.nombre || undefined}
+                onChange={(e) => onNombre(e.target.value)}
+                className={errors.nombre ? "error" : ""}
+                aria-invalid={errors.nombre}
                 aria-describedby={errors.nombre ? "err-nombre" : undefined}
               />
               {errors.nombre && (
-                <span id="err-nombre" className="err-msg">⚠ Este campo es obligatorio</span>
+                <span id="err-nombre" className="field-error">Campo obligatorio</span>
               )}
             </div>
 
-            {/* TIPO */}
-            <div className={`wa-field ${errors.tipo ? "has-error" : ""}`}>
+            {/* Tipo de proyecto */}
+            <div className="wa-field">
               <label htmlFor="tipo">Tipo de proyecto</label>
               <select
                 id="tipo"
                 value={tipo}
-                onChange={(e) => setTipo(e.target.value)}
-                aria-invalid={errors.tipo || undefined}
+                onChange={(e) => onTipo(e.target.value)}
+                className={errors.tipo ? "error" : ""}
+                aria-invalid={errors.tipo}
                 aria-describedby={errors.tipo ? "err-tipo" : undefined}
               >
+                <option value="">Selecciona una opción…</option>
                 <option>Landing Page</option>
                 <option>Sitio Corporativo</option>
                 <option>Tienda Online (E-commerce)</option>
@@ -240,28 +280,29 @@ export default function WhatsAppForm() {
                 <option>Otro</option>
               </select>
               {errors.tipo && (
-                <span id="err-tipo" className="err-msg">⚠ Este campo es obligatorio</span>
+                <span id="err-tipo" className="field-error">Campo obligatorio</span>
               )}
             </div>
 
-            {/* NEGOCIO */}
-            <div className={`wa-field ${errors.negocio ? "has-error" : ""}`}>
+            {/* Rubro / negocio */}
+            <div className="wa-field">
               <label htmlFor="negocio">Rubro o negocio</label>
               <input
                 id="negocio"
                 type="text"
                 placeholder="Ej: Restaurante, tienda, etc…"
                 value={negocio}
-                onChange={(e) => setNegocio(e.target.value)}
-                aria-invalid={errors.negocio || undefined}
+                onChange={(e) => onNegocio(e.target.value)}
+                className={errors.negocio ? "error" : ""}
+                aria-invalid={errors.negocio}
                 aria-describedby={errors.negocio ? "err-negocio" : undefined}
               />
               {errors.negocio && (
-                <span id="err-negocio" className="err-msg">⚠ Este campo es obligatorio</span>
+                <span id="err-negocio" className="field-error">Campo obligatorio</span>
               )}
             </div>
 
-            {/* PRESUPUESTO (opcional) */}
+            {/* Presupuesto (opcional) */}
             <div className="wa-field">
               <label htmlFor="presupuesto">Presupuesto (opcional)</label>
               <select
@@ -278,27 +319,34 @@ export default function WhatsAppForm() {
             </div>
           </div>
 
-          {/* DETALLE */}
-          <div className={`wa-field ${errors.detalle ? "has-error" : ""}`}>
+          {/* Detalle */}
+          <div className="wa-field">
             <label htmlFor="detalle">Detalle</label>
             <textarea
               id="detalle"
               rows={4}
               placeholder="Cuéntanos qué necesitas (páginas, referencias, plazos)…"
               value={detalle}
-              onChange={(e) => setDetalle(e.target.value)}
-              aria-invalid={errors.detalle || undefined}
+              onChange={(e) => onDetalle(e.target.value)}
+              className={errors.detalle ? "error" : ""}
+              aria-invalid={errors.detalle}
               aria-describedby={errors.detalle ? "err-detalle" : undefined}
             />
             {errors.detalle && (
-              <span id="err-detalle" className="err-msg">⚠ Este campo es obligatorio</span>
+              <span id="err-detalle" className="field-error">Campo obligatorio</span>
             )}
           </div>
 
           <button
             type="submit"
             className="btn btn-primary wa-btn"
-            style={{ padding: "1.15rem 2rem", fontSize: "1.1rem", fontWeight: 800, minHeight: 55, cursor: "pointer" }}
+            style={{
+              padding: "1.2rem 2rem",
+              fontSize: "1.1rem",
+              fontWeight: 700,
+              minHeight: 55,
+              cursor: "pointer",
+            }}
             aria-label="Enviar por WhatsApp"
             disabled={loading}
           >
@@ -307,7 +355,7 @@ export default function WhatsAppForm() {
         </form>
       </div>
 
-      {/* Toast */}
+      {/* TOAST (abajo izquierda) */}
       <div
         aria-live="polite"
         aria-atomic="true"
@@ -353,37 +401,25 @@ export default function WhatsAppForm() {
         )}
       </div>
 
-      {/* Estilos de error neón y accesibilidad */}
+      {/* Estilos del borde rojo animado y accesibilidad */}
       <style jsx global>{`
         @keyframes neonPulseRed {
-          0% { box-shadow: 0 0 0 rgba(239, 68, 68, 0.0); }
-          50% { box-shadow: 0 0 18px rgba(239, 68, 68, 0.65); }
-          100% { box-shadow: 0 0 0 rgba(239, 68, 68, 0.0); }
+          0%, 100% { box-shadow: 0 0 0px rgba(239, 68, 68, 0.0); }
+          50%      { box-shadow: 0 0 18px rgba(239, 68, 68, 0.55); }
         }
-        .wa-field.has-error input,
-        .wa-field.has-error select,
-        .wa-field.has-error textarea {
+        .wa-field .error {
           border-color: #ef4444 !important;
           outline: none !important;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22) !important;
           animation: neonPulseRed 1.6s ease-in-out infinite;
         }
-        .wa-field.has-error label {
-          color: #fecaca !important; /* rojo claro */
-          font-weight: 700;
-        }
-        .err-msg {
-          display: block;
+        .field-error {
+          display: inline-block;
           margin-top: 6px;
-          color: #fecaca; /* rojo claro legible */
-          font-size: 0.9rem;
+          font-size: 0.85rem;
           font-weight: 700;
-          text-shadow: 0 0 8px rgba(239,68,68,0.35);
-        }
-        /* Mejora foco accesible */
-        .wa-field input:focus,
-        .wa-field select:focus,
-        .wa-field textarea:focus {
-          outline: none;
+          color: #fecaca; /* rojo claro para contraste */
+          text-shadow: 0 0 10px rgba(239, 68, 68, 0.45);
         }
       `}</style>
     </section>
