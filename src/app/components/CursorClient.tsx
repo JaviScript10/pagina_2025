@@ -1,18 +1,28 @@
+// src/app/components/CursorClient.tsx
 "use client";
 import { useEffect } from "react";
 
 export default function CursorClient() {
-    useEffect(() => {
-        const cursor = document.getElementById("cursor") as HTMLElement | null;
-        if (!cursor) return;
+  useEffect(() => {
+    const isCoarse =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(pointer: coarse)").matches;
 
-        const move = (e: MouseEvent) => {
-            cursor.style.transform = `translate(${e.clientX - 10}px, ${e.clientY - 10}px)`;
-        };
+    const cursor = document.getElementById("cursor");
+    if (!cursor) return;
 
-        window.addEventListener("mousemove", move);
-        return () => window.removeEventListener("mousemove", move);
-    }, []);
+    if (isCoarse) {
+      cursor.style.display = "none";
+      return;
+    }
 
-    return null;
+    const move = (e: MouseEvent) => {
+      cursor.style.transform = `translate(${e.clientX - 10}px, ${e.clientY - 10}px)`;
+    };
+    window.addEventListener("mousemove", move);
+    return () => window.removeEventListener("mousemove", move);
+  }, []);
+
+  return null;
 }
