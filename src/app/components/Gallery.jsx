@@ -77,14 +77,35 @@ export default function Gallery() {
     }
   };
 
-  // Bloquear scroll cuando el modal está abierto
+  // 🔒 Bloquear scroll cuando el modal está abierto SIN que el viewport salte
   useEffect(() => {
     if (selectedProject) {
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.width = "100%";
       document.body.style.overflow = "hidden";
     } else {
+      const top = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
       document.body.style.overflow = "";
+      if (top) {
+        const scrollY = -parseInt(top, 10);
+        window.scrollTo(0, scrollY);
+      }
     }
     return () => {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
       document.body.style.overflow = "";
     };
   }, [selectedProject]);
@@ -363,10 +384,11 @@ export default function Gallery() {
           }
         }
 
-        /* Modal overlay */
+        /* === Overlay Modal muy estable para móvil/desktop === */
         .gallery-modal-overlay {
           position: fixed;
           inset: 0;
+          height: 100dvh; /* evita saltos por barra del navegador en móvil */
           background: rgba(0, 0, 0, 0.85);
           backdrop-filter: blur(8px);
           z-index: 99999;
@@ -374,14 +396,16 @@ export default function Gallery() {
           align-items: center;
           justify-content: center;
           padding: 20px;
+          padding-top: calc(20px + env(safe-area-inset-top));
+          padding-bottom: calc(20px + env(safe-area-inset-bottom));
         }
 
-        /* Modal contenedor - 40% más pequeño */
+        /* Modal contenedor - compacto (≈40% más pequeño que el típico) */
         .gallery-modal {
-          width: min(580px, 90vw); /* Desktop: 580px | Móvil: 90% */
-          max-height: min(680px, 85vh);
+          width: min(580px, 90vw);      /* Desktop: 580px | Móvil: 90% */
+          max-height: min(680px, 85dvh); /* respeta alto visible real */
           background: #0b1324;
-          border-radius: 18px;              /* ⬅️ FIX aquí */
+          border-radius: 18px;
           overflow: hidden;
           border: 1px solid rgba(255, 255, 255, 0.15);
           box-shadow: 0 22px 90px rgba(0, 0, 0, 0.55);
@@ -390,7 +414,6 @@ export default function Gallery() {
           position: relative;
         }
 
-        /* Imagen contenedor */
         .gallery-modal-img-wrap {
           position: relative;
           flex: 1;
@@ -398,7 +421,6 @@ export default function Gallery() {
           min-height: 320px;
         }
 
-        /* Contenido modal */
         .gallery-modal-content {
           padding: 18px 20px 20px;
           background: rgba(2, 6, 23, 0.95);
@@ -426,7 +448,6 @@ export default function Gallery() {
           line-height: 1.65;
         }
 
-        /* Botón cerrar */
         .gallery-modal-close {
           position: absolute;
           top: 12px;
@@ -452,11 +473,10 @@ export default function Gallery() {
           transform: rotate(90deg);
         }
 
-        /* Responsive modal */
         @media (max-width: 768px) {
           .gallery-modal {
             width: 92vw;
-            max-height: 90vh;
+            max-height: 90dvh;
           }
           .gallery-modal-img-wrap {
             min-height: 240px;
@@ -481,7 +501,7 @@ export default function Gallery() {
         @media (max-width: 480px) {
           .gallery-modal {
             width: 95vw;
-            max-height: 88vh;
+            max-height: 88dvh;
           }
           .gallery-modal-img-wrap {
             min-height: 200px;
