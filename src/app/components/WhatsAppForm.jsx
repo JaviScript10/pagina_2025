@@ -2,19 +2,17 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import { WA_PHONE } from "../config"; // ← ruta relativa desde /components
+import { WA_PHONE } from "../config";
 
 export default function WhatsAppForm() {
   const PHONE = WA_PHONE;
 
-  // Campos
   const [nombre, setNombre] = useState("");
-  const [tipo, setTipo] = useState(""); // requerido (antes tenía default, ahora forzamos elección)
+  const [tipo, setTipo] = useState("");
   const [negocio, setNegocio] = useState("");
   const [presupuesto, setPresupuesto] = useState("");
   const [detalle, setDetalle] = useState("");
 
-  // Estados UI
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, type: "success", msg: "" });
   const [errors, setErrors] = useState({
@@ -24,7 +22,6 @@ export default function WhatsAppForm() {
     detalle: false,
   });
 
-  // Mostrar toast (abajo izquierda)
   const showToast = (msg, type = "success", ms = 3000) => {
     setToast({ show: true, type, msg });
     window.clearTimeout(showToast._t);
@@ -33,17 +30,15 @@ export default function WhatsAppForm() {
     }, ms);
   };
 
-  // Al volver desde WhatsApp, mostrar "Enviado" si quedó marcado
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const ok = localStorage.getItem("wa_last_submit");
+    const ok = sessionStorage.getItem("wa_last_submit");
     if (ok === "ok") {
-      localStorage.removeItem("wa_last_submit");
-      showToast("¡Enviado! Te contactaremos pronto ✅", "success", 3500);
+      sessionStorage.removeItem("wa_last_submit");
+      showToast("¡Cotización enviada! Te contactaremos pronto 🚀", "success", 5000);
     }
   }, []);
 
-  // Link de WhatsApp
   const waLink = useMemo(() => {
     const lineas = [
       "Hola, quiero una cotización",
@@ -59,7 +54,6 @@ export default function WhatsAppForm() {
     return `https://wa.me/${PHONE}?${params.toString()}`;
   }, [PHONE, nombre, tipo, negocio, presupuesto, detalle]);
 
-  // Helpers
   const isMobile = () => {
     if (typeof navigator === "undefined") return false;
     return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -80,67 +74,59 @@ export default function WhatsAppForm() {
     return !any;
   };
 
-  // Enviar
-const onSubmit = async (e) => {
-  e.preventDefault();
-  if (loading) return;
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
 
-  // Validación requerida
-  if (!validate()) return;
+    if (!validate()) return;
 
-  const payload = {
-    subject: "Nueva cotización desde el formulario",
-    name: nombre,
-    email: "",
-    phone: "",
-    message: `Proyecto: ${tipo}\nRubro/negocio: ${negocio}\nPresupuesto: ${presupuesto || "A definir"}\nDetalle: ${detalle}`,
-    meta: {
-      source: "WhatsAppForm",
-      url: typeof window !== "undefined" ? window.location.href : "",
-    },
+    const payload = {
+      subject: "Nueva cotización desde el formulario",
+      name: nombre,
+      email: "",
+      phone: "",
+      message: `Proyecto: ${tipo}\nRubro/negocio: ${negocio}\nPresupuesto: ${presupuesto || "A definir"}\nDetalle: ${detalle}`,
+      meta: {
+        source: "WhatsAppForm",
+        url: typeof window !== "undefined" ? window.location.href : "",
+      },
+    };
+
+    const mobile = isMobile();
+
+    try {
+      setLoading(true);
+
+      if (mobile && navigator.sendBeacon) {
+        const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+        navigator.sendBeacon("/api/send", blob);
+      } else {
+        fetch("/api/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      }
+
+      if (mobile) {
+        showToast("Abriendo WhatsApp… 📱", "success", 1500);
+        sessionStorage.setItem("wa_last_submit", "ok");
+        setTimeout(() => {
+          window.location.href = waLink;
+        }, 300);
+      } else {
+        window.open(waLink, "_blank", "noopener,noreferrer");
+        showToast("¡Cotización enviada! Te contactaremos pronto 🚀", "success", 4000);
+      }
+    } catch {
+      if (!mobile) {
+        showToast("No pudimos enviar el correo, pero WhatsApp se abrió 🙌", "error", 4000);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const mobile = isMobile();
-
-  try {
-    setLoading(true);
-
-    // ===== Enviar correo sin bloquear la navegación =====
-    if (mobile && navigator.sendBeacon) {
-      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-      navigator.sendBeacon("/api/send", blob);
-    } else {
-      fetch("/api/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    }
-
-    if (mobile) {
-      // Mostrar algo ANTES de salir a WhatsApp (lo alcanzas a ver)
-      showToast("Abriendo WhatsApp…", "success", 1200);
-      // marcar para mostrar “¡Enviado!” cuando vuelvas
-      localStorage.setItem("wa_last_submit", "ok");
-      // pequeño delay para que el toast se vea
-      setTimeout(() => {
-        window.location.href = waLink; // mismo tab (sin pestaña blanca)
-      }, 200);
-    } else {
-      // PC → nueva pestaña y feedback inmediato
-      window.open(waLink, "_blank", "noopener,noreferrer");
-      showToast("¡Enviado! Te contactaremos pronto ✅", "success", 3500);
-    }
-  } catch {
-    if (!mobile) {
-      showToast("No pudimos enviar el correo, pero WhatsApp se abrió igual 🙌", "error", 4000);
-    }
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // ==== Fondo animado Matrix Neón ==== (igual al tuyo, con mejoras de rendimiento)
   const canvasRef = useRef(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -211,7 +197,6 @@ const onSubmit = async (e) => {
     };
   }, []);
 
-  // Handlers para limpiar error de cada campo al escribir
   const onNombre = (v) => {
     setNombre(v);
     if (errors.nombre && v.trim()) setErrors((e) => ({ ...e, nombre: false }));
@@ -231,19 +216,16 @@ const onSubmit = async (e) => {
 
   return (
     <section id="cotizar" className="wa-section" aria-labelledby="cotizar-title">
-      {/* Fondo animado */}
       <div className="wa-bg" aria-hidden="true">
         <canvas ref={canvasRef} />
       </div>
 
-      {/* Contenido */}
       <div className="wa-container">
         <h2 id="cotizar-title" className="wa-title">Cotiza tu proyecto</h2>
         <p className="wa-sub">Responde rápido estas preguntas y te contactamos por WhatsApp.</p>
 
         <form onSubmit={onSubmit} className="wa-form" noValidate>
           <div className="wa-grid">
-            {/* Nombre */}
             <div className="wa-field">
               <label htmlFor="nombre">Tu nombre</label>
               <input
@@ -261,7 +243,6 @@ const onSubmit = async (e) => {
               )}
             </div>
 
-            {/* Tipo de proyecto */}
             <div className="wa-field">
               <label htmlFor="tipo">Tipo de proyecto</label>
               <select
@@ -284,7 +265,6 @@ const onSubmit = async (e) => {
               )}
             </div>
 
-            {/* Rubro / negocio */}
             <div className="wa-field">
               <label htmlFor="negocio">Rubro o negocio</label>
               <input
@@ -302,7 +282,6 @@ const onSubmit = async (e) => {
               )}
             </div>
 
-            {/* Presupuesto (opcional) */}
             <div className="wa-field">
               <label htmlFor="presupuesto">Presupuesto (opcional)</label>
               <select
@@ -319,7 +298,6 @@ const onSubmit = async (e) => {
             </div>
           </div>
 
-          {/* Detalle */}
           <div className="wa-field">
             <label htmlFor="detalle">Detalle</label>
             <textarea
@@ -355,104 +333,146 @@ const onSubmit = async (e) => {
         </form>
       </div>
 
-      {/* TOAST (abajo izquierda) */}
+      {/* TOAST ARREGLADO - Ahora SÍ se ve encima */}
       <div
+        className="toast-wrapper"
         aria-live="polite"
         aria-atomic="true"
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          left: "20px",
-          zIndex: 100000,
-        }}
       >
         {toast.show && (
           <div
-            style={{
-              background:
-                toast.type === "success"
-                  ? "linear-gradient(135deg, #22c55e, #16a34a)"
-                  : "linear-gradient(135deg, #ef4444, #dc2626)",
-              color: "white",
-              padding: "12px 16px",
-              borderRadius: "12px",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-              minWidth: "280px",
-              fontWeight: 800,
-              border: "1px solid rgba(255,255,255,0.25)",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-            }}
+            className={`toast toast-${toast.type}`}
             role="status"
           >
-            <span
-              style={{
-                display: "inline-block",
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "white",
-                opacity: 0.9,
-              }}
-            />
-            <span>{toast.msg}</span>
+            <span className="toast-dot" />
+            <span className="toast-msg">{toast.msg}</span>
           </div>
         )}
       </div>
 
-      {/* Estilos del borde rojo animado y accesibilidad */}
       <style jsx global>{`
         @keyframes neonPulseRed {
           0%, 100% { box-shadow: 0 0 0px rgba(239, 68, 68, 0.0); }
           50%      { box-shadow: 0 0 18px rgba(239, 68, 68, 0.55); }
         }
+        
         .wa-field .error {
           border-color: #ef4444 !important;
           outline: none !important;
           box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22) !important;
           animation: neonPulseRed 1.6s ease-in-out infinite;
         }
+        
         .field-error {
+          position: absolute;
+          left: 8px;
+          bottom: -20px;
+          z-index: 10;
           display: inline-block;
-          margin-top: 6px;
-          font-size: 0.85rem;
+          padding: 2px 8px;
+          background: rgba(239, 68, 68, 0.95);
+          border-radius: 6px;
+          font-size: 0.82rem;
           font-weight: 700;
-          color: #fecaca; /* rojo claro para contraste */
-          text-shadow: 0 0 10px rgba(239, 68, 68, 0.45);
+          color: #ffffff;
+          text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+          border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
+        .wa-bg { z-index: 0; pointer-events: none; }
+        .wa-container { position: relative; z-index: 1; }
+        .wa-form { position: relative; z-index: 2; overflow: visible; }
+        .wa-field { position: relative; margin-bottom: 30px; }
 
-        /* Asegura stacking correcto */
-.wa-bg { z-index: 0; pointer-events: none; }
-.wa-container { position: relative; z-index: 3; }
-.wa-form { position: relative; z-index: 4; overflow: visible; }
+        /* ===== TOAST ARREGLADO ===== */
+        .toast-wrapper {
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 999999 !important;
+          pointer-events: none;
+          width: 100%;
+          max-width: 500px;
+          padding: 0 16px;
+        }
 
-/* Cada campo posiciona el error por encima y evita que se “meta atrás” */
-.wa-field { position: relative; margin-bottom: 28px; }
+        .toast {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: white;
+          padding: 16px 20px;
+          border-radius: 16px;
+          box-shadow: 
+            0 20px 60px rgba(0, 0, 0, 0.4),
+            0 0 0 1px rgba(255, 255, 255, 0.25);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-weight: 800;
+          font-size: 1rem;
+          animation: toastSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          pointer-events: auto;
+        }
 
-/* Mensaje de error SIEMPRE visible arriba del formulario */
-.field-error {
-  position: absolute;
-  left: 8px;
-  bottom: -18px;
-  z-index: 6;                /* encima del card glass */
-  display: inline-block;
-  padding: 0 6px;
-  background: rgba(2, 6, 23, 0.85); /* plaquita oscura para contraste en móvil */
-  border-radius: 6px;
-  border: 1px solid rgba(239, 68, 68, 0.45);
-}
+        .toast-error {
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
 
-/* El toast nunca queda detrás (z-index muy alto) */
-#toast-portal,
-.toast-portal,
-body > div[aria-live="polite"] {
-  z-index: 100000 !important;
-}
+        .toast-dot {
+          display: inline-block;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: white;
+          opacity: 0.95;
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+          animation: toastPulse 1.5s ease-in-out infinite;
+        }
 
+        .toast-msg {
+          flex: 1;
+        }
+
+        @keyframes toastSlideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes toastPulse {
+          0%, 100% { opacity: 0.95; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+          .toast-wrapper {
+            bottom: 90px;
+            max-width: calc(100% - 32px);
+          }
+          
+          .toast {
+            padding: 14px 18px;
+            font-size: 0.95rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .toast-wrapper {
+            bottom: 80px;
+          }
+          
+          .toast {
+            padding: 12px 16px;
+            font-size: 0.9rem;
+          }
+        }
       `}</style>
     </section>
   );
 }
-
