@@ -1,29 +1,47 @@
 "use client";
 import { useMemo, useState, useEffect, useRef } from "react";
-import { WA_PHONE } from "../config";
+import { WA_PHONE } from "../config"; // ruta relativa desde /components
 
 export default function WhatsAppForm() {
   const PHONE = WA_PHONE;
 
+  // Campos
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState("Landing Page");
   const [negocio, setNegocio] = useState("");
   const [presupuesto, setPresupuesto] = useState("");
   const [detalle, setDetalle] = useState("");
+
   const [loading, setLoading] = useState(false);
 
-  // Aviso inline dentro del formulario
-  const [inlineMsg, setInlineMsg] = useState({ show: false, type: "success", text: "" });
+  // Errores por campo
+  const [errors, setErrors] = useState({
+    nombre: "",
+    tipo: "",
+    negocio: "",
+    detalle: "",
+  });
 
-  // TOAST (si lo quieres además del inline)
+  // TOAST (éxito/error)
   const [toast, setToast] = useState({ show: false, type: "success", msg: "" });
-  const showToast = (msg, type = "success") => {
+  const toastTimerRef = useRef(null);
+
+  const showToast = (msg, type = "success", ms = 3000) => {
     setToast({ show: true, type, msg });
-    window.clearTimeout(showToast._t);
-    showToast._t = window.setTimeout(() => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
       setToast((t) => ({ ...t, show: false }));
-    }, 2500);
+    }, ms);
   };
+
+  // Ocultar toast cuando el usuario empieza a escribir (cualquier campo)
+  useEffect(() => {
+    if (toast.show) {
+      setToast((t) => ({ ...t, show: false }));
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nombre, tipo, negocio, detalle]);
 
   // Construye el link de WhatsApp
   const waLink = useMemo(() => {
@@ -41,17 +59,65 @@ export default function WhatsAppForm() {
     return `https://wa.me/${PHONE}?${params.toString()}`;
   }, [PHONE, nombre, tipo, negocio, presupuesto, detalle]);
 
+  // Validación
+  const validate = () => {
+    const newErr = {
+      nombre: "",
+      tipo: "",
+      negocio: "",
+      detalle: "",
+    };
+    let ok = true;
+
+    if (!nombre.trim()) {
+      newErr.nombre = "Campo obligatorio";
+      ok = false;
+    }
+    if (!tipo || !tipo.trim()) {
+      newErr.tipo = "Campo obligatorio";
+      ok = false;
+    }
+    if (!negocio.trim()) {
+      newErr.negocio = "Campo obligatorio";
+      ok = false;
+    }
+    if (!detalle.trim()) {
+      newErr.detalle = "Campo obligatorio";
+      ok = false;
+    }
+
+    setErrors(newErr);
+    return ok;
+  };
+
+  // Limpia error individual al escribir
+  const clearError = (field) => {
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
 
-    // Limpia aviso inline
-    setInlineMsg({ show: false, type: "success", text: "" });
+    // Validación previa
+    if (!validate()) {
+      showToast("Completa los campos obligatorios marcados en rojo.", "error", 3500);
+      // no abrir WhatsApp si faltan datos
+      return;
+    }
 
-    // 1) Abre WhatsApp (nueva pestaña) — puede verse como “blanca” por un segundo, es normal
-    window.open(waLink, "_blank", "noopener,noreferrer");
+    
+    // Abrir WhatsApp sin pestaña vacía (modo móvil friendly)
+const a = document.createElement("a");
+a.href = waLink;
+a.target = "_self"; // 🔥 así evita la ventana en blanco en móvil
+a.rel = "noopener noreferrer";
+document.body.appendChild(a);
+a.click();
+a.remove();
 
-    // 2) Intentar enviar correo (no fallará si no hay SMTP por la API resiliente)
+
+    // 2) Enviar correo (no bloquear UI si falla)
     try {
       setLoading(true);
       const res = await fetch("/api/send", {
@@ -60,33 +126,27 @@ export default function WhatsAppForm() {
         body: JSON.stringify({
           subject: "Nueva cotización desde el formulario",
           name: nombre,
-          email: "",  // si agregas campo email
-          phone: "",  // si agregas campo teléfono
+          email: "", // si luego agregas campo email, complétalo
+          phone: "", // si luego agregas teléfono, complétalo
           message: `Proyecto: ${tipo}\nRubro/negocio: ${negocio}\nPresupuesto: ${presupuesto}\nDetalle: ${detalle}`,
-          meta: { source: "WhatsAppForm", url: typeof window !== "undefined" ? window.location.href : "" },
+          meta: {
+            source: "WhatsAppForm",
+            url: typeof window !== "undefined" ? window.location.href : "",
+          },
         }),
       });
 
-      // Pase lo que pase, mostramos éxito para no confundir
-      setInlineMsg({ show: true, type: "success", text: "¡Enviado! Te contactaremos pronto ✅" });
-      showToast("¡Enviado! Te contactaremos pronto ✅", "success");
-
-      // Opcional: limpia los campos
-      setNombre("");
-      setTipo("Landing Page");
-      setNegocio("");
-      setPresupuesto("");
-      setDetalle("");
+      if (!res.ok) throw new Error("Error al enviar");
+      showToast("¡Enviado! Te contactaremos pronto ✅", "success", 3000);
     } catch {
-      // Igual mostramos éxito (la API ya no devuelve 500 por SMTP faltante)
-      setInlineMsg({ show: true, type: "success", text: "¡Enviado! Te contactaremos pronto ✅" });
-      showToast("¡Enviado! Te contactaremos pronto ✅", "success");
+      // Solo informativo: WhatsApp ya se abrió
+      showToast("No pudimos enviar el correo, pero WhatsApp se abrió ✅", "error", 3500);
     } finally {
       setLoading(false);
     }
   };
 
-  // ==== Fondo animado Matrix Neón (igual que tenías) ====
+  // ==== Fondo animado Matrix Neón Mejorado ====
   const canvasRef = useRef(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -154,6 +214,7 @@ export default function WhatsAppForm() {
     return () => {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(raf);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
@@ -169,44 +230,64 @@ export default function WhatsAppForm() {
         <h2 id="cotizar-title" className="wa-title">Cotiza tu proyecto</h2>
         <p className="wa-sub">Responde rápido estas preguntas y te contactamos por WhatsApp.</p>
 
-        <form onSubmit={onSubmit} className="wa-form">
+        <form onSubmit={onSubmit} className="wa-form" noValidate>
           <div className="wa-grid">
+            {/* Nombre */}
             <div className="wa-field">
-              <label htmlFor="nombre">Tu nombre</label>
+              <label htmlFor="nombre">Tu nombre <span className="req">*</span></label>
               <input
                 id="nombre"
                 type="text"
                 placeholder="Ej: Andrea"
                 value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                required
+                onChange={(e) => { setNombre(e.target.value); clearError("nombre"); }}
+                aria-invalid={!!errors.nombre}
+                aria-describedby={errors.nombre ? "err-nombre" : undefined}
               />
-              {/* Mensaje de campos obligatorios (si quieres mostrarlo siempre en mobile) */}
-              <small className="field-hint">* Campo obligatorio</small>
+              {errors.nombre && (
+                <span id="err-nombre" className="err-msg">• {errors.nombre}</span>
+              )}
             </div>
 
+            {/* Tipo */}
             <div className="wa-field">
-              <label htmlFor="tipo">Tipo de proyecto</label>
-              <select id="tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+              <label htmlFor="tipo">Tipo de proyecto <span className="req">*</span></label>
+              <select
+                id="tipo"
+                value={tipo}
+                onChange={(e) => { setTipo(e.target.value); clearError("tipo"); }}
+                aria-invalid={!!errors.tipo}
+                aria-describedby={errors.tipo ? "err-tipo" : undefined}
+              >
                 <option>Landing Page</option>
                 <option>Sitio Corporativo</option>
                 <option>Tienda Online (E-commerce)</option>
                 <option>App / Proyecto a medida</option>
                 <option>Otro</option>
               </select>
+              {errors.tipo && (
+                <span id="err-tipo" className="err-msg">• {errors.tipo}</span>
+              )}
             </div>
 
+            {/* Negocio */}
             <div className="wa-field">
-              <label htmlFor="negocio">Rubro o negocio</label>
+              <label htmlFor="negocio">Rubro o negocio <span className="req">*</span></label>
               <input
                 id="negocio"
                 type="text"
                 placeholder="Ej: Restaurante, tienda, etc…"
                 value={negocio}
-                onChange={(e) => setNegocio(e.target.value)}
+                onChange={(e) => { setNegocio(e.target.value); clearError("negocio"); }}
+                aria-invalid={!!errors.negocio}
+                aria-describedby={errors.negocio ? "err-negocio" : undefined}
               />
+              {errors.negocio && (
+                <span id="err-negocio" className="err-msg">• {errors.negocio}</span>
+              )}
             </div>
 
+            {/* Presupuesto (opcional) */}
             <div className="wa-field">
               <label htmlFor="presupuesto">Presupuesto (opcional)</label>
               <select
@@ -223,38 +304,27 @@ export default function WhatsAppForm() {
             </div>
           </div>
 
+          {/* Detalle */}
           <div className="wa-field">
-            <label htmlFor="detalle">Detalle (opcional)</label>
+            <label htmlFor="detalle">Detalle <span className="req">*</span></label>
             <textarea
               id="detalle"
               rows={4}
               placeholder="Cuéntanos qué necesitas (páginas, referencias, plazos)…"
               value={detalle}
-              onChange={(e) => setDetalle(e.target.value)}
+              onChange={(e) => { setDetalle(e.target.value); clearError("detalle"); }}
+              aria-invalid={!!errors.detalle}
+              aria-describedby={errors.detalle ? "err-detalle" : undefined}
             />
+            {errors.detalle && (
+              <span id="err-detalle" className="err-msg">• {errors.detalle}</span>
+            )}
           </div>
-
-          {/* Aviso inline (queda dentro del form) */}
-          {inlineMsg.show && (
-            <div
-              className="inline-alert"
-              role="status"
-              aria-live="polite"
-              style={{
-                background:
-                  inlineMsg.type === "success"
-                    ? "linear-gradient(135deg, #22c55e, #16a34a)"
-                    : "linear-gradient(135deg, #ef4444, #dc2626)",
-              }}
-            >
-              {inlineMsg.text}
-            </div>
-          )}
 
           <button
             type="submit"
             className="btn btn-primary wa-btn"
-            style={{ padding: "1.2rem 2rem", fontSize: "1.1rem", fontWeight: 700, minHeight: 55 }}
+            style={{ padding: "1.2rem 2rem", fontSize: "1.1rem", fontWeight: 800, minHeight: 55, cursor: "pointer" }}
             aria-label="Enviar por WhatsApp"
             disabled={loading}
           >
@@ -263,17 +333,16 @@ export default function WhatsAppForm() {
         </form>
       </div>
 
-      {/* TOAST (arriba-centro y por encima de todo) */}
+      {/* TOAST */}
       <div
         aria-live="polite"
         aria-atomic="true"
         style={{
           position: "fixed",
-          top: "14px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 99999, // ⬅️ por encima de todo
-          pointerEvents: "none",
+          bottom: "20px",
+          left: "20px",
+          right: "auto",
+          zIndex: 9999,
         }}
       >
         {toast.show && (
@@ -284,41 +353,59 @@ export default function WhatsAppForm() {
                   ? "linear-gradient(135deg, #22c55e, #16a34a)"
                   : "linear-gradient(135deg, #ef4444, #dc2626)",
               color: "white",
-              padding: "10px 14px",
+              padding: "12px 16px",
               borderRadius: "12px",
               boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-              minWidth: "260px",
+              minWidth: "280px",
               fontWeight: 800,
               border: "1px solid rgba(255,255,255,0.25)",
-              textAlign: "center",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
             }}
             role="status"
           >
-            {toast.msg}
+            <span
+              style={{
+                display: "inline-block",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "white",
+                opacity: 0.9,
+              }}
+            />
+            <span>{toast.msg}</span>
           </div>
         )}
       </div>
 
-      {/* AUX CSS */}
-      <style jsx>{`
-        .inline-alert {
-          margin: 10px 0 6px;
-          color: #fff;
-          padding: 10px 14px;
-          border-radius: 10px;
+      {/* Estilos mínimos para errores y accesibilidad */}
+      <style jsx global>{`
+        .wa-field [aria-invalid="true"] {
+          border-color: #ef4444 !important;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+        }
+        .wa-field .req {
+          color: #ef4444;
           font-weight: 800;
-          border: 1px solid rgba(255,255,255,.25);
-          box-shadow: 0 8px 24px rgba(0,0,0,.25);
+          margin-left: 4px;
         }
-        .field-hint {
-          display: none;
-          color: #e2e8f0;
-          opacity: .9;
-          font-size: 12px;
+        .wa-field .err-msg {
+          display: inline-block;
+          color: #ef4444;
+          font-weight: 800;
           margin-top: 6px;
+          background: rgba(239, 68, 68, 0.12);
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          border-radius: 8px;
+          padding: 6px 10px;
         }
-        @media (max-width: 640px) {
-          .field-hint { display: inline-block; }
+        /* Mejor legibilidad en móvil */
+        @media (max-width: 768px) {
+          .wa-field .err-msg {
+            font-size: 0.95rem;
+          }
         }
       `}</style>
     </section>
