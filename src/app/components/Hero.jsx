@@ -1,380 +1,371 @@
 "use client";
-import { useEffect, useRef } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 export default function Hero() {
   const canvasRef = useRef(null);
+  const rafId = useRef(0);
+  const mouse = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
+  const [isCoarse, setIsCoarse] = useState(false);
+  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    let particles = [];
-    let animationFrame;
-    const PARTICLE_COUNT = 80; // ↑ antes 60
+    setIsCoarse(window.matchMedia?.("(pointer: coarse)")?.matches || false);
+    setReduced(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false);
 
-    // Tamaño canvas
+    if (reduced) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { alpha: true });
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const w = canvas.parentElement?.clientWidth || window.innerWidth;
+      const h = canvas.parentElement?.clientHeight || window.innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
-    window.addEventListener("resize", resize);
+    window.addEventListener("resize", resize, { passive: true });
 
-    // Partículas
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        size: Math.random() * 3.6 + 1.2, // ↑ +40%
-        speedX: (Math.random() - 0.5) * 0.55,
-        speedY: (Math.random() - 0.5) * 0.55,
-      });
-    }
+    const blobs = Array.from({ length: 6 }, () => ({
+      x: Math.random() * canvas.width / dpr,
+      y: Math.random() * canvas.height / dpr,
+      r: 180 + Math.random() * 220,
+      ax: (Math.random() - 0.5) * 0.15,
+      ay: (Math.random() - 0.5) * 0.15,
+      hue: 180 + Math.random() * 140,
+      alpha: 0.14 + Math.random() * 0.12,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.002 + Math.random() * 0.003,
+    }));
 
-    // Cursor reactivo
-    const mouse = { x: null, y: null };
-    window.addEventListener("mousemove", (e) => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-    });
+    const parts = Array.from({ length: 90 }, () => ({
+      x: Math.random() * canvas.width / dpr,
+      y: Math.random() * canvas.height / dpr,
+      v: 0.5 + Math.random() * 1.2,
+      o: 0.1 + Math.random() * 0.35,
+      len: 90 + Math.random() * 140,
+    }));
 
-    const animate = () => {
-      // Fondo “nebulosa”
-      ctx.fillStyle = "rgba(2, 6, 23, 0.7)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const onMove = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      mouse.current.vx = x - mouse.current.x;
+      mouse.current.vy = y - mouse.current.y;
+      mouse.current.x = x;
+      mouse.current.y = y;
+    };
+    if (!isCoarse) window.addEventListener("mousemove", onMove, { passive: true });
 
-      // Velo de nebulosa extra
-      const grd = ctx.createRadialGradient(
-        canvas.width * 0.5,
-        canvas.height * 0.4,
-        60,
-        canvas.width * 0.5,
-        canvas.height * 0.6,
-        Math.max(canvas.width, canvas.height) * 0.8
-      );
-      grd.addColorStop(0, "rgba(34,211,238,0.12)");
-      grd.addColorStop(0.4, "rgba(6,182,212,0.08)");
-      grd.addColorStop(1, "rgba(2,6,23,0)");
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const draw = () => {
+      const w = canvas.width / dpr;
+      const h = canvas.height / dpr;
+      ctx.clearRect(0, 0, w, h);
 
-      particles.forEach((p) => {
-        // Atracción suave hacia el cursor
-        if (mouse.x !== null && mouse.y !== null) {
-          const dx = mouse.x - p.x;
-          const dy = mouse.y - p.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 160) {
-            p.x -= dx / (dist || 1);
-            p.y -= dy / (dist || 1);
-          }
-        }
+      ctx.fillStyle = "rgba(2,6,23,0.85)";
+      ctx.fillRect(0, 0, w, h);
 
-        // Movimiento base
-        p.x += p.speedX;
-        p.y += p.speedY;
+      ctx.globalCompositeOperation = "lighter";
+      blobs.forEach((b, i) => {
+        b.phase += b.speed;
+        b.x += Math.cos(b.phase + i) * b.ax + (mouse.current.vx * 0.02);
+        b.y += Math.sin(b.phase + i) * b.ay + (mouse.current.vy * 0.02);
+        if (b.x < -b.r) b.x = w + b.r;
+        if (b.x > w + b.r) b.x = -b.r;
+        if (b.y < -b.r) b.y = h + b.r;
+        if (b.y > h + b.r) b.y = -b.r;
 
-        // Wrap
-        if (p.x < 0) p.x = canvas.width;
-        if (p.y < 0) p.y = canvas.height;
-        if (p.x > canvas.width) p.x = 0;
-        if (p.y > canvas.height) p.y = 0;
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+        const c1 = `hsla(${b.hue}, 85%, 65%, ${b.alpha})`;
+        const c2 = `hsla(${(b.hue + 40) % 360}, 90%, 55%, ${b.alpha * 0.7})`;
+        g.addColorStop(0, c1);
+        g.addColorStop(1, c2);
 
-        // Partícula con glow ↑ +40%
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.fillStyle = "rgba(34, 211, 238, 0.9)";
-        ctx.shadowBlur = 22; // ↑
-        ctx.shadowColor = "rgba(34, 211, 238, 0.9)";
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fill();
       });
+      ctx.globalCompositeOperation = "source-over";
 
-      animationFrame = requestAnimationFrame(animate);
+      parts.forEach((p) => {
+        ctx.save();
+        ctx.strokeStyle = `rgba(163, 230, 255, ${p.o})`;
+        ctx.shadowColor = "rgba(56, 189, 248, 0.7)";
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + p.len, p.y + p.len);
+        ctx.stroke();
+        ctx.restore();
+
+        const dx = p.x - mouse.current.x;
+        const dy = p.y - mouse.current.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const repel = isCoarse ? 0 : Math.max(0, 140 - dist) * 0.006;
+        p.x += p.v + (dx / dist) * repel;
+        p.y += p.v + (dy / dist) * repel;
+
+        if (p.x > w + 180 || p.y > h + 180) {
+          p.x = -120 + Math.random() * 40;
+          p.y = Math.random() * h * 0.7;
+        }
+      });
+
+      rafId.current = requestAnimationFrame(draw);
     };
-
-    animate();
+    draw();
 
     return () => {
+      cancelAnimationFrame(rafId.current);
       window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animationFrame);
+      if (!isCoarse) window.removeEventListener("mousemove", onMove);
     };
-  }, []);
+  }, [isCoarse, reduced]);
+
+  // Parallax del rayo en desktop
+  const rayRef = useRef(null);
+  useEffect(() => {
+    if (isCoarse) return;
+    const el = rayRef.current;
+    if (!el) return;
+
+    const onMouse = (e) => {
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = (e.clientX - cx) / rect.width;
+      const dy = (e.clientY - cy) / rect.height;
+      el.style.transform = `translateY(-6px) rotate(4deg) translate(${dx * 10}px, ${dy * 10}px)`;
+    };
+    const onLeave = () => {
+      el.style.transform = "translateY(-6px) rotate(4deg) translate(0, 0)";
+    };
+
+    window.addEventListener("mousemove", onMouse);
+    window.addEventListener("mouseleave", onLeave);
+    return () => {
+      window.removeEventListener("mousemove", onMouse);
+      window.removeEventListener("mouseleave", onLeave);
+    };
+  }, [isCoarse]);
 
   return (
-    <section
-      className="hero-ultra"
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        background: "radial-gradient(circle at center, #0a0f1f, #020617)",
-      }}
-    >
-      {/* Fondo: Nebulosa + Partículas */}
-      <canvas ref={canvasRef} className="hero-canvas" />
+    <section className="hero-ultra">
+      <canvas ref={canvasRef} className="hero-bg" aria-hidden="true" />
 
-      {/* Glow central pulsante */}
-      <div className="hero-glow" />
+      <div className="hero-wrap">
+        {/* RAYO ARRIBA DEL TÍTULO (visible en mobile, más pequeño) */}
+        <div className="ray-top" aria-hidden="true" ref={rayRef}>
+          <div className="ray-glow" />
+          <Image
+            src="/brand/rayo.png"
+            alt=""
+            fill
+            sizes="(max-width: 520px) 130px, (max-width: 900px) 180px, 260px"
+            className="ray-img"
+            priority
+          />
+        </div>
 
-      {/* Contenido */}
-      <div className="hero-content">
-        {/* Cohete cartoon premium */}
-        <RocketIcon />
-
-        <h1 className="hero-title">
-          Desarrollo Web de <span>Alta Velocidad</span>
+        <h1 className="title">
+          <span className="title-top">Desarrollo Web de</span>
+          <span className="title-strong">Alta Velocidad</span>
         </h1>
 
-        <p className="hero-sub">
-          Soluciones digitales de próxima generación
+        <p className="subtitle">
+          <span className="float">Soluciones digitales de próxima generación.</span>
+          <span className="muted"> Sitios modernos, apps a medida y e-commerce listos para vender.</span>
         </p>
 
-        <div className="hero-cta">
-          <Link href="#cotizar" className="btn-holo">
-            <span className="btn-ring" />
-            <span className="btn-label">Cotizar Ahora</span>
-          </Link>
-
-          <Link href="#portfolio" className="btn-holo-ghost">
-            <span className="btn-ring" />
-            <span className="btn-label">Ver Portafolio</span>
-          </Link>
+        <div className="cta-row">
+          <a href="#cotizar" className="btn holo">
+            <span className="btn-icon">
+              <Image src="/brand/rayo.png" alt="" width={22} height={22} priority />
+            </span>
+            Cotizar Proyecto
+          </a>
+          <a href="#gallery" className="btn wire">★ Ver Portafolio</a>
         </div>
+
+        <ul className="badges">
+          <li>Entrega 2–3 semanas</li>
+          <li>SEO + Performance</li>
+          <li>Hosting incluido</li>
+          <li>Soporte humano</li>
+        </ul>
       </div>
 
       <style jsx>{`
-        .hero-content {
+        .hero-ultra {
           position: relative;
-          z-index: 2;
+          min-height: clamp(640px, 92vh, 980px);
+          display: grid;
+          place-items: center;
           text-align: center;
-          color: white;
-          animation: fadeIn 1s ease forwards;
-          transform: translateY(-24px); /* Título un poco más arriba */
-        }
-
-        .hero-title {
-          font-size: clamp(2.2rem, 6.2vw, 4.3rem);
-          font-weight: 900;
-          text-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
-          margin: 0.25rem 0 0.4rem;
-          letter-spacing: 0.2px;
-        }
-        .hero-title span {
-          color: #22d3ee;
-          text-shadow: 0 0 28px rgba(34, 211, 238, 0.9);
-        }
-
-        /* Subtítulo cinematográfico */
-        .hero-sub {
-          margin-top: 6px;
-          font-size: clamp(1.1rem, 2vw, 1.6rem);
-          font-weight: 800;
-          opacity: 0.92;
-          letter-spacing: 0.6px;
-          text-shadow: 0 0 18px rgba(34, 211, 238, 0.45);
-          animation: floatText 3.2s ease-in-out infinite;
-        }
-
-        .hero-cta {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          margin-top: 22px;
-          flex-wrap: wrap;
-        }
-
-        /* Botón holográfico (Opción A) */
-        .btn-holo,
-        .btn-holo-ghost {
-          position: relative;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          padding: 14px 28px;
-          border-radius: 999px;
-          font-weight: 900;
-          text-decoration: none;
           overflow: hidden;
           isolation: isolate;
-          transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+          padding: 5rem 1rem 4rem;
+          background: radial-gradient(1200px 420px at 80% -10%, rgba(56,189,248,0.18), rgba(0,0,0,0)),
+                      linear-gradient(180deg, rgb(2 6 23), rgb(2 6 23));
         }
-
-        .btn-holo {
-          background: linear-gradient(135deg, rgba(6,182,212,0.4), rgba(14,165,233,0.6));
-          color: #fff;
-          border: 1px solid rgba(255, 255, 255, 0.45);
-          box-shadow:
-            0 12px 36px rgba(6, 182, 212, 0.45),
-            inset 0 0 24px rgba(34, 211, 238, 0.35);
-          backdrop-filter: blur(8px);
-        }
-        .btn-holo:hover {
-          transform: translateY(-3px);
-          filter: brightness(1.05) saturate(1.05);
-          box-shadow:
-            0 16px 44px rgba(6, 182, 212, 0.6),
-            inset 0 0 28px rgba(34, 211, 238, 0.45);
-        }
-
-        .btn-holo-ghost {
-          background: rgba(255, 255, 255, 0.09);
-          color: #ffffff;
-          border: 1px solid rgba(255, 255, 255, 0.35);
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.35);
-          backdrop-filter: blur(10px);
-        }
-        .btn-holo-ghost:hover {
-          transform: translateY(-3px);
-          background: rgba(255, 255, 255, 0.16);
-          box-shadow:
-            0 14px 36px rgba(15, 23, 42, 0.45),
-            inset 0 0 16px rgba(255, 255, 255, 0.18);
-        }
-
-        /* Aro de energía */
-        .btn-ring {
+        .hero-bg {
           position: absolute;
-          inset: -2px;
-          border-radius: 999px;
-          background:
-            conic-gradient(
-              from 0deg,
-              rgba(34,211,238,0),
-              rgba(34,211,238,0.75),
-              rgba(14,165,233,0.85),
-              rgba(34,211,238,0)
-            );
-          animation: spinRing 2.8s linear infinite;
-          -webkit-mask:
-            linear-gradient(#000 0 0) content-box,
-            linear-gradient(#000 0 0);
-          -webkit-mask-composite: xor;
-                  mask-composite: exclude;
-          padding: 2px;
-          pointer-events: none;
-          opacity: 0.8;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          opacity: 0.9;
+          z-index: 0;
         }
-        .btn-label {
+        .hero-wrap {
           position: relative;
           z-index: 1;
-          letter-spacing: 0.2px;
-        }
-        @keyframes spinRing {
-          to { transform: rotate(360deg); }
+          max-width: 1100px;
+          margin: 0 auto;
         }
 
-        /* Glow central */
-        .hero-glow {
+        /* Rayo */
+        .ray-top {
+          position: relative;
+          width: 260px;
+          height: 220px;
+          margin: 0 auto 8px;
+          transform: translateY(-6px) rotate(4deg);
+          filter: drop-shadow(0 16px 36px rgba(56,189,248,0.28));
+          pointer-events: none;
+        }
+        .ray-img { object-fit: contain; }
+        .ray-glow {
           position: absolute;
-          width: 720px; /* ↑ leve */
-          height: 720px;
+          inset: -18%;
           border-radius: 50%;
-          background: radial-gradient(
-            circle,
-            rgba(34, 211, 238, 0.18),
-            rgba(6, 182, 212, 0) 70%
-          );
-          filter: blur(90px);
-          z-index: 1;
-          animation: pulseGlow 6s ease-in-out infinite;
+          background: radial-gradient(closest-side, rgba(163,230,255,0.35), rgba(163,230,255,0) 70%);
+          filter: blur(8px);
+          animation: rayPulse 3.6s ease-in-out infinite;
         }
-        @keyframes pulseGlow {
-          0% { transform: scale(1); opacity: 0.5; }
-          50% { transform: scale(1.28); opacity: 0.85; }
-          100% { transform: scale(1); opacity: 0.5; }
+        @keyframes rayPulse {
+          0%, 100% { opacity: 0.35; transform: scale(1); }
+          50%      { opacity: 0.6;  transform: scale(1.06); }
         }
 
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
+        /* Título */
+        .title { margin: 0 0 0.75rem; line-height: 1.1; letter-spacing: -0.02em; }
+        .title-top {
+          display: block;
+          font-size: clamp(1.2rem, 2.2vw, 1.6rem);
+          font-weight: 800;
+          color: #c7faff;
+          opacity: 0.85;
+          text-shadow: 0 4px 16px rgba(0,0,0,0.45);
         }
-        @keyframes floatText {
-          0% { transform: translateY(0); }
+        .title-strong {
+          display: block;
+          font-size: clamp(2rem, 6.2vw, 4rem);
+          font-weight: 900;
+          color: #eaffff;
+          background: linear-gradient(90deg, #e5fdff, #b8f3ff 30%, #e5fdff);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          filter: drop-shadow(0 0 18px rgba(56,189,248,0.38));
+        }
+
+        /* Subtítulo */
+        .subtitle {
+          margin: 0 auto 1.6rem;
+          max-width: 820px;
+          font-size: clamp(1.05rem, 2vw, 1.35rem);
+          line-height: 1.8;
+          color: #dff8ff;
+          text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+          font-weight: 600;
+        }
+        .subtitle .float { display: inline-block; animation: float 5.5s ease-in-out infinite; }
+        .subtitle .muted { opacity: 0.9; }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-6px); }
-          100% { transform: translateY(0); }
+        }
+
+        /* CTAs */
+        .cta-row {
+          display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+          margin: 1.2rem 0 2.2rem;
+        }
+        .btn {
+          display: inline-flex; align-items: center; justify-content: center; gap: .6rem;
+          text-decoration: none; font-weight: 900; letter-spacing: 0.2px;
+          padding: 0.95rem 1.6rem; border-radius: 9999px;
+          border: 1px solid rgba(255,255,255,0.2); color: #03141a;
+          transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
+          cursor: pointer; user-select: none; will-change: transform, box-shadow;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-icon { display: inline-flex; align-items: center; justify-content: center; transform: translateY(-1px);
+          filter: drop-shadow(0 0 8px rgba(56,189,248,0.35)); }
+
+        .btn.holo {
+          color: #061923;
+          background: radial-gradient(120% 180% at 10% 20%, rgba(255,255,255,0.95), rgba(210, 245, 255, 0.95)),
+                      linear-gradient(90deg, rgba(34, 211, 238, 0.25), rgba(14, 165, 233, 0.25));
+          border: 1px solid rgba(34, 211, 238, 0.6);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 14px 40px rgba(14,165,233,0.35), 0 0 40px rgba(14,165,233,0.35);
+        }
+        .btn.holo:hover {
+          background: radial-gradient(110% 180% at 10% 20%, rgba(255,255,255,1), rgba(225, 250, 255, 1)),
+                      linear-gradient(90deg, rgba(34, 211, 238, 0.35), rgba(14, 165, 233, 0.35));
+          border-color: rgba(34, 211, 238, 0.9);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 20px 54px rgba(14,165,233,0.45), 0 0 62px rgba(14,165,233,0.5);
+        }
+
+        .btn.wire {
+          color: #dffaff; background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(163, 230, 255, 0.45);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 10px 26px rgba(0,0,0,0.28);
+          backdrop-filter: blur(6px);
+        }
+        .btn.wire:hover {
+          color: #ffffff; background: rgba(163, 230, 255, 0.14);
+          border-color: rgba(163, 230, 255, 0.75);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 16px 44px rgba(56,189,248,0.28), 0 0 44px rgba(56,189,248,0.32);
+        }
+
+        /* Badges */
+        .badges { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; list-style: none; padding: 0; margin: 0; }
+        .badges li {
+          color: #0a1c24; background: rgba(255,255,255,0.92);
+          border: 1px solid rgba(255,255,255,0.75);
+          border-radius: 9999px; padding: 0.55rem 1rem; font-weight: 700;
+          box-shadow: 0 8px 22px rgba(255,255,255,0.25);
+        }
+
+        /* Responsive */
+        @media (max-width: 1000px) {
+          .ray-top { width: 220px; height: 190px; }
+        }
+        @media (max-width: 900px) {
+          /* AHORA SE MUESTRA EN MÓVIL, PERO MÁS PEQUEÑO Y SIN TAPAR */
+          .hero-ultra { padding-top: 4.5rem; }
+          .ray-top { width: 180px; height: 150px; margin-bottom: 6px; transform: translateY(-4px) rotate(4deg); }
+          .title-strong { font-size: clamp(2rem, 8vw, 3rem); }
+          .subtitle { font-size: 1.05rem; }
+        }
+        @media (max-width: 520px) {
+          .hero-ultra { padding-top: 4rem; }
+          .ray-top { width: 150px; height: 130px; margin-bottom: 4px; }
+          .badges li { font-size: .95rem; }
+        }
+
+        /* Accesibilidad */
+        @media (prefers-reduced-motion: reduce) {
+          .subtitle .float, .ray-glow { animation: none !important; }
         }
       `}</style>
     </section>
-  );
-}
-
-/* ==== Cohete cartoon premium (SVG con gradientes + estela animada) ==== */
-function RocketIcon() {
-  return (
-    <div style={{ display: "flex", justifyContent: "center", marginBottom: "6px" }}>
-      <svg
-        width="86"
-        height="86"
-        viewBox="0 0 86 86"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ filter: "drop-shadow(0 10px 30px rgba(34,211,238,0.45))" }}
-        aria-hidden="true"
-      >
-        <defs>
-          <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#ffffff" />
-            <stop offset="1" stopColor="#e2e8f0" />
-          </linearGradient>
-          <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#22d3ee" />
-            <stop offset="1" stopColor="#0ea5e9" />
-          </linearGradient>
-          <radialGradient id="flame" cx="50%" cy="50%" r="50%">
-            <stop offset="0" stopColor="#fde047" />
-            <stop offset="0.5" stopColor="#fb923c" />
-            <stop offset="1" stopColor="#ef4444" />
-          </radialGradient>
-        </defs>
-
-        {/* Estela */}
-        <path
-          d="M30 70 C 28 80, 58 80, 56 70"
-          fill="none"
-          stroke="url(#accent)"
-          strokeWidth="6"
-          strokeLinecap="round"
-          style={{ opacity: 0.8 }}
-        >
-          <animate
-            attributeName="stroke-opacity"
-            values="0.4;1;0.4"
-            dur="2.4s"
-            repeatCount="indefinite"
-          />
-        </path>
-
-        {/* Llama */}
-        <ellipse cx="43" cy="62" rx="9" ry="12" fill="url(#flame)">
-          <animateTransform
-            attributeName="transform"
-            type="scale"
-            values="1;1.08;1"
-            dur="1.2s"
-            repeatCount="indefinite"
-            additive="sum"
-          />
-        </ellipse>
-
-        {/* Cuerpo */}
-        <g transform="translate(16, 6)">
-          <path
-            d="M27 0c10 10 16 26 16 40 0 7-1 12-3 16H14C12 52 11 47 11 40 11 26 17 10 27 0z"
-            fill="url(#body)"
-            stroke="rgba(2,6,23,0.15)"
-            strokeWidth="2"
-          />
-          {/* Ventana */}
-          <circle cx="27" cy="24" r="7.5" fill="url(#accent)" stroke="white" strokeWidth="2" />
-          {/* Aletas */}
-          <path d="M11 44c-5 2-8 8-8 12h12c0-4 0-8-4-12z" fill="url(#accent)" opacity="0.9" />
-          <path d="M43 44c5 2 8 8 8 12H39c0-4 0-8 4-12z" fill="url(#accent)" opacity="0.9" />
-        </g>
-      </svg>
-    </div>
   );
 }

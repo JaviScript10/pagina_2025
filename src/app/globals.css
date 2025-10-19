@@ -1279,3 +1279,27 @@ a:hover::after {
 
 .custom-cursor{position:fixed;top:0;left:0;width:20px;height:20px;border:2px solid rgba(34,211,238,.9);border-radius:50%;pointer-events:none;z-index:99998;transform:translate(-9999px,-9999px);box-shadow:0 0 18px rgba(34,211,238,.7),inset 0 0 8px rgba(34,211,238,.4);transition:transform .04s linear}
 @media (max-width:920px){#cursor{display:none!important}}
+
+/* Smooth scroll en toda la página */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Offset por header sticky cuando se navega por hash (fallback si no corre el JS) */
+#services,
+#benefits,
+#demos,
+#testimonials,
+#faq,
+#cotizar {
+  scroll-margin-top: 80px; /* Ajusta si tu header cambia de alto */
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Compensa la altura del header pegado */
+section[id] {
+  scroll-margin-top: 90px; /* ajusta si tu header es más alto/bajo */
+}

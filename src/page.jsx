@@ -18,6 +18,27 @@ export default function Home() {
                 <Services />
             </section>
 
+            import Hero from "./components/Hero";
+import Services from "./components/Services";
+import Demos from "./components/Demos";
+import Benefits from "./components/Benefits";
+import WhatsAppForm from "./components/WhatsAppForm";
+// …el resto que tengas
+
+export default function HomePage() {
+  return (
+    <>
+      <Hero />
+      <Services />
+      <Demos />      {/* ← NUEVO */}
+      <Benefits />
+      {/* …lo que siga */}
+      <WhatsAppForm />
+    </>
+  );
+}
+
+
             <section id="benefits">
                 <Benefits />
             </section>
