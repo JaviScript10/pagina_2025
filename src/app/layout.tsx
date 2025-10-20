@@ -3,6 +3,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Header from "./components/Header";
 import CursorClient from "./components/CursorClient";
+import ChatDock from "./components/ChatDock";
+
 
 export const metadata: Metadata = {
   title: "Velocity Web - Soluciones Digitales",
@@ -46,6 +48,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CursorClient />
 
         {children}
+
+        {/* Chat flotante */}
+        <ChatDock />
       </body>
     </html>
   );
