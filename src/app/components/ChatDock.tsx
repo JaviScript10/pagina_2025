@@ -34,17 +34,16 @@ export default function ChatDock() {
     data: { tipo: "", negocio: "", presupuesto: "", plazo: "" },
   });
 
-  // Control de “fase final” para no duplicar “Volver al inicio”
   const [finalMsgId, setFinalMsgId] = useState<string | null>(null);
-  // Toast UI
+
   const [toast, setToast] = useState<{ show: boolean; msg: string }>({ show: false, msg: "" });
   const toastTimerRef = useRef<number | null>(null);
 
-  // iOS scroll-restore al volver de WhatsApp
+  // iOS: restaurar scroll al volver desde WhatsApp
   const pendingScrollRestoreRef = useRef(false);
   const savedScrollYRef = useRef(0);
 
-  // Evitar doble open de WhatsApp
+  // Evita doble apertura de WhatsApp
   const waOpeningRef = useRef(false);
 
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -60,7 +59,6 @@ export default function ChatDock() {
     setPortalEl(el);
   }, []);
 
-  // Mensaje inicial
   useEffect(() => {
     if (!mounted) return;
     if (messages.length === 0) {
@@ -75,7 +73,7 @@ export default function ChatDock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
-  /* Lock scroll al abrir y reset de badge (con cleanup correcto) */
+  /* Lock scroll al abrir y reset de badge */
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = open ? "hidden" : prev || "";
@@ -85,17 +83,16 @@ export default function ChatDock() {
     };
   }, [open]);
 
-  // Autoscroll en cada cambio
+  // Autoscroll
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open]);
 
-  // Restaurar scroll cuando regresamos visibles (después de abrir WhatsApp)
+  // Restaurar scroll al volver visibles (después de abrir WhatsApp)
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible" && pendingScrollRestoreRef.current) {
         pendingScrollRestoreRef.current = false;
-        // Evitar “salto” de layout
         window.scrollTo({ top: savedScrollYRef.current, left: 0, behavior: "instant" as ScrollBehavior });
       }
     };
@@ -119,7 +116,6 @@ export default function ChatDock() {
     setMessages((p) => [...p, { id: crypto.randomUUID(), role: "user", text }]);
   }
 
-  // WhatsApp text (wizard si existe, si no, resumen del chat)
   const waText = useMemo(() => buildWizardMessageOrSummary(wizard.data, messages), [wizard.data, messages]);
   const phone = WA_PHONE || "56912345678";
   const waLink = `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`;
@@ -160,31 +156,35 @@ export default function ChatDock() {
     );
   }
 
-  // ====== Apertura de WhatsApp con FIX iOS & sin duplicar “Volver al inicio” ======
+  // === Abrir WhatsApp (iOS-friendly, sin pestaña blanca) ===
   function openWhatsAppOnce() {
-    if (waOpeningRef.current) return; // evita doble open
+    if (waOpeningRef.current) return;
     waOpeningRef.current = true;
 
-    // Guardar scroll antes de abrir (para volver sin “salto” de layout)
+    // Guardar scroll para restaurar al volver
     savedScrollYRef.current = window.scrollY;
     pendingScrollRestoreRef.current = true;
 
-    // Abrir en nueva pestaña sin alterar la actual
-    const newWin = window.open(waLink, "_blank", "noopener,noreferrer");
-    // Si el navegador bloquea popups, newWin será null (no hacemos nada disruptivo)
-    // De todos modos mostramos el toast de enviado:
+    // Crear <a> y simular click: iOS maneja mejor que window.open con noreferrer
+    const a = document.createElement("a");
+    a.href = waLink;
+    a.target = "_blank";
+    a.rel = "noopener"; // sin 'noreferrer' para evitar pestaña en blanco en iOS
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    // Aviso visual
     showToast("✅ Mensaje enviado por WhatsApp.");
 
-    // Quitar chips de la tarjeta final (para no duplicar “Volver al inicio”)
+    // Quitar chips del mensaje final para evitar duplicados
     if (finalMsgId) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === finalMsgId ? { ...m, chips: undefined } : m))
-      );
+      setMessages((prev) => prev.map((m) => (m.id === finalMsgId ? { ...m, chips: undefined } : m)));
     }
-    // Dejar SOLO un botón “Volver al inicio”
+    // Añadir SOLO el botón "Volver al inicio" sin burbuja vacía (chips standalone)
     addAssistant("", ["Volver al inicio"]);
 
-    // Liberar el guard después de un breve tiempo (seguro)
+    // Liberar guard
     window.setTimeout(() => {
       waOpeningRef.current = false;
     }, 800);
@@ -224,7 +224,6 @@ export default function ChatDock() {
       return;
     }
 
-    // Grupo "Otros…"
     if (lower.includes("otros")) {
       addAssistant("Elige una opción:", [
         "Soporte & Mantención",
@@ -268,7 +267,6 @@ export default function ChatDock() {
       return;
     }
 
-    // Fallback
     addAssistant("Puedo ayudarte con:", [
       "Landing Page",
       "Aplicación Web",
@@ -324,7 +322,6 @@ export default function ChatDock() {
       setWizard({ active: false, step: 0, data });
 
       const resumen = buildWizardSummary(data);
-      // Guardamos el id de esta “tarjeta final” para limpiar chips al enviar WhatsApp
       const id = addAssistant(
         ["✅ **Cotización lista:**", resumen, "", "¿La enviamos por WhatsApp?"].join("\n"),
         ["Enviar por WhatsApp", "Volver al inicio"]
@@ -422,7 +419,7 @@ export default function ChatDock() {
           --text-secondary: #cbd5e1;
         }
 
-        /* FAB (izquierda, abajo pegado) */
+        /* FAB */
         .vc-fab {
           position: fixed !important;
           left: 16px !important;
@@ -483,12 +480,12 @@ export default function ChatDock() {
           pointer-events: auto !important;
         }
 
-        /* Dock compacto, pegado izquierda y abajo (pero no toda pantalla) */
+        /* Dock (compacto, abajo-izquierda) */
         .vc-dock {
           position: fixed !important;
           left: 16px !important;
           bottom: 16px !important;
-          transform: translateX(-110%) !important; /* completamente escondido */
+          transform: translateX(-110%) !important; /* 100% escondido */
           width: min(380px, 90vw) !important;
           height: min(640px, 88vh) !important;
           background: var(--glass) !important;
@@ -631,7 +628,7 @@ export default function ChatDock() {
           border-bottom-right-radius: 4px !important;
         }
 
-        /* Chips (2 por fila en desktop, 1 en móvil) */
+        /* Chips */
         .vc-chips {
           display: grid !important;
           grid-template-columns: 1fr 1fr !important;
@@ -663,11 +660,18 @@ export default function ChatDock() {
           grid-column: 1 / -1 !important;
         }
 
+        /* Chips standalone (sin burbuja de texto) */
+        .vc-chips-standalone {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 8px !important;
+        }
+
         /* Toast */
         .vc-toast {
           position: fixed !important;
           left: 16px !important;
-          bottom: calc(16px + 72px) !important; /* arriba del FAB */
+          bottom: calc(16px + 72px) !important;
           background: linear-gradient(135deg, #22c55e, #16a34a) !important;
           color: #fff !important;
           padding: 10px 14px !important;
@@ -691,7 +695,8 @@ export default function ChatDock() {
           .vc-dock.open {
             transform: translate(-50%, 0) !important;
           }
-          .vc-chips {
+          .vc-chips,
+          .vc-chips-standalone {
             grid-template-columns: 1fr !important;
           }
           .vc-toast {
@@ -733,9 +738,28 @@ function Bubble({
   onChipClick?: (c: string) => void;
 }) {
   const isAssistant = role === "assistant";
+  const hasText = Boolean(text && text.trim().length > 0);
+
+  // Si no hay texto y solo chips -> render standalone (sin burbuja blanca)
+  if (!hasText && chips && chips.length > 0) {
+    return (
+      <div className="vc-chips-standalone">
+        {chips.map((c) => (
+          <button
+            key={c}
+            className={`vc-chip ${c.toLowerCase().includes("whatsapp") ? "whatsapp-chip" : ""}`}
+            onClick={() => onChipClick?.(c)}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className={`vc-bubble ${isAssistant ? "vc-assistant" : "vc-user"}`}>
-      <div className="vc-inner" dangerouslySetInnerHTML={{ __html: md(text) }} />
+      {hasText && <div className="vc-inner" dangerouslySetInnerHTML={{ __html: md(text) }} />}
       {!!chips?.length && (
         <div className="vc-chips">
           {chips.map((c) => (
