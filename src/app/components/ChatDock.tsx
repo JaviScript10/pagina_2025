@@ -106,16 +106,16 @@ export default function ChatDock() {
   function openWhatsAppSafe(waUrl: string, e?: React.MouseEvent | Event) {
     try {
       if (e) {
-        // @ts-ignore
+        // @ts-expect-error
         if (e.preventDefault) e.preventDefault();
-        // @ts-ignore
+        // @ts-expect-error
         if (e.stopPropagation) e.stopPropagation();
       }
       const win = window.open(waUrl, "_blank", "noopener,noreferrer");
       if (win) win.opener = null;
     } catch {
       // fallback menor: copiar URL
-      // @ts-ignore
+      // @ts-expect-error
       navigator.clipboard?.writeText(waUrl).catch(() => { });
     }
   }

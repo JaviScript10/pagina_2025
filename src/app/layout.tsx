@@ -40,6 +40,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <link rel="icon" href="/favicon.ico" />
         {/* <link rel="manifest" href="/manifest.json" /> */}
       </head>
+
       <body id="top" className="antialiased">
         <Header />
 
