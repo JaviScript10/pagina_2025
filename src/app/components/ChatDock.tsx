@@ -682,29 +682,46 @@ export default function ChatDock() {
           box-shadow: 0 10px 26px rgba(34, 197, 94, 0.3) !important;
         }
 
-        /* Móvil */
-        @media (max-width: 768px) {
-          .vc-dock {
-            left: 50% !important;
-            bottom: 0 !important;
-            transform: translate(-50%, 110%) !important;
-            width: 94vw !important;
-            height: 88vh !important;
-            border-radius: 16px 16px 0 0 !important;
-          }
-          .vc-dock.open {
-            transform: translate(-50%, 0) !important;
-          }
-          .vc-chips,
-          .vc-chips-standalone {
-            grid-template-columns: 1fr !important;
-          }
-          .vc-toast {
-            left: 50% !important;
-            bottom: 20px !important;
-            transform: translateX(-50%) !important;
-          }
-        }
+/* Móvil: centrar sin translateX y altura estable */
+@media (max-width: 768px) {
+  .vc-dock {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: max(0px, env(safe-area-inset-bottom)) !important;
+    margin: 0 auto !important;
+
+    /* Sin translateX: solo deslizamiento vertical */
+    transform: translateY(100%) !important;
+
+    /* Ancho y radio superiores */
+    width: 100vw !important;
+    max-width: 640px !important; /* opcional: limita en tablets chicas */
+    border-radius: 16px 16px 0 0 !important;
+
+    /* Altura: fallback (vh) + nuevas unidades móviles */
+    height: 88vh !important;    /* fallback */
+    height: 86svh !important;   /* Android estable */
+    height: 86dvh !important;   /* navegadores nuevos */
+  }
+  .vc-dock.open {
+    transform: translateY(0) !important;
+  }
+
+  .vc-chips,
+  .vc-chips-standalone {
+    grid-template-columns: 1fr !important;
+  }
+
+  .vc-toast {
+    left: 50% !important;
+    bottom: calc(20px + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important;
+  }
+
+  .vc-inputbar {
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+}
 
         /* Scrollbar */
         .vc-body::-webkit-scrollbar {

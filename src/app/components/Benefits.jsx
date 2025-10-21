@@ -2,11 +2,11 @@
 import { motion } from "framer-motion";
 
 const benefits = [
-  { icon: "⚡", title: "Velocidad Garantizada", desc: "Sitios ultra-rapidos optimizados para cargar en menos de 2 segundos" },
+  { icon: "⚡", title: "Velocidad Garantizada", desc: "Sitios ultrarrápidos optimizados para cargar en menos de 2 segundos" },
   { icon: "💰", title: "Un Solo Pago", desc: "Sin mensualidades eternas. Pagas una vez y el sitio es tuyo" },
   { icon: "🎨", title: "Diseño Premium", desc: "Interfaces modernas que destacan tu marca y generan confianza" },
-  { icon: "📱", title: "Mobile First", desc: "Optimizado para moviles donde esta el 70% de tus clientes" },
-  { icon: "🌊", title: "Equipo Local", desc: "Base en Valparaiso con atencion personalizada" },
+  { icon: "📱", title: "Mobile First", desc: "Optimizado para móviles, donde está el 70% de tus clientes" },
+  { icon: "🌊", title: "Equipo Local", desc: "Base en Valparaíso con atención personalizada" },
   { icon: "🛠️", title: "Soporte Real", desc: "Contacto directo con desarrolladores" }
 ];
 
@@ -16,11 +16,11 @@ export default function Benefits() {
       <div style={{ maxWidth: '1400px', margin: '0 auto', paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: 'center', marginBottom: '5rem' }}>
           <motion.div animate={{ boxShadow: ['0 0 20px rgba(34, 211, 238, 0.5)', '0 0 40px rgba(34, 211, 238, 0.8)', '0 0 20px rgba(34, 211, 238, 0.5)'] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }} style={{ display: 'inline-block', background: 'linear-gradient(to right, rgba(34, 211, 238, 0.2), rgba(6, 182, 212, 0.2))', border: '2px solid rgb(34 211 238)', borderRadius: '9999px', padding: '1.5rem 3rem', marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '3rem', fontWeight: '900', color: 'white' }}>¿Por que Velocity Web?</h2>
+            <h2 style={{ fontSize: '3rem', fontWeight: '900', color: 'white' }}>¿Por qué Velocity Web?</h2>
           </motion.div>
-          <br/>
+          <br />
           <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.1)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '9999px', padding: '1rem 2rem' }}>
-            <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)' }}>Mas que una agencia web, somos tu partner digital estrategico</p>
+            <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)' }}>Más que una agencia web, somos tu partner digital estratégico</p>
           </div>
         </motion.div>
 

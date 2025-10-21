@@ -191,7 +191,8 @@ export default function Hero() {
             </span>
             Cotizar Proyecto
           </a>
-          <a href="#gallery" className="btn wire">★ Ver Portafolio</a>
+          {/* 👉 Corregido: de #gallery a #projects */}
+          <a href="#projects" className="btn wire">★ Proyectos</a>
         </div>
 
         <ul className="badges">

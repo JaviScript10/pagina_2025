@@ -2,9 +2,9 @@
 import { motion } from "framer-motion";
 
 const testimonials = [
-  { name: "Maria Gonzalez", company: "Restaurante Mar Adentro", text: "Increible trabajo. El sitio quedo hermoso y funcional. Las ventas online aumentaron 200% en el primer mes. Totalmente recomendados.", avatar: "M" },
-  { name: "Carlos Muñoz", company: "Deportes Extremos", text: "Servicio profesional y rapido. Mi tienda online esta funcionando perfecto. El equipo siempre esta disponible para cualquier consulta.", avatar: "C" },
-  { name: "Ana Perez", company: "Estudio Juridico", text: "Entendieron perfectamente lo que necesitaba. El resultado supero mis expectativas. Ahora recibo mas consultas por mi web que por telefono.", avatar: "A" }
+  { name: "María González", company: "Restaurante Mar Adentro", text: "Increíble trabajo. El sitio quedó hermoso y funcional. Las ventas online aumentaron un 200 % en el primer mes. Totalmente recomendados.", avatar: "M" },
+  { name: "Carlos Muñoz", company: "Deportes Extremos", text: "Servicio profesional y rápido. Mi tienda online está funcionando perfecto. El equipo siempre está disponible para cualquier consulta.", avatar: "C" },
+  { name: "Ana Pérez", company: "Estudio Jurídico", text: "Entendieron perfectamente lo que necesitaba. El resultado superó mis expectativas. Ahora recibo más consultas por mi web que por teléfono.", avatar: "A" }
 ];
 
 export default function Testimonials() {
@@ -15,9 +15,9 @@ export default function Testimonials() {
           <motion.div animate={{ boxShadow: ['0 0 20px rgba(34, 211, 238, 0.5)', '0 0 40px rgba(34, 211, 238, 0.8)', '0 0 20px rgba(34, 211, 238, 0.5)'] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }} style={{ display: 'inline-block', background: 'linear-gradient(to right, rgba(34, 211, 238, 0.2), rgba(6, 182, 212, 0.2))', border: '2px solid rgb(34 211 238)', borderRadius: '9999px', padding: '1.5rem 3rem', marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '3rem', fontWeight: '900', color: 'white' }}>Clientes Satisfechos</h2>
           </motion.div>
-          <br/>
+          <br />
           <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.1)', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '9999px', padding: '1rem 2rem' }}>
-            <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)' }}>Mas de 50 negocios confian en nosotros para su presencia digital</p>
+            <p style={{ fontSize: '1.125rem', color: 'rgba(255,255,255,0.9)' }}>Más de 50 negocios confían en nosotros para su presencia digital</p>
           </div>
         </motion.div>
 
