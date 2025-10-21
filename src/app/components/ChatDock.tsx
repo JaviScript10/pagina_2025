@@ -1,34 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+"use client";
 
-// Constantes
-const WA_PHONE = "56912345678"; // Cambia por tu número real
-const STORAGE_KEY = "velocity_chat_history_v1";
-const WIZARD_KEY = "velocity_chat_wizard_v1";
-const WIZARD_LAST_KEY = "velocity_chat_wizard_last_result_v1";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { WA_PHONE } from "../config";
 
 type Role = "assistant" | "user";
 type Msg = { id: string; role: Role; text: string; chips?: string[] };
+type WizardData = { tipo: string; negocio: string; presupuesto: string; plazo: string };
+type WizardState = { active: boolean; step: 0 | 1 | 2 | 3 | 4; data: WizardData };
 
-type WizardData = {
-  tipo: string;
-  negocio: string;
-  presupuesto: string;
-  plazo: string;
-};
-type WizardState = {
-  active: boolean;
-  step: number;
-  data: WizardData;
-};
-
-// Chips de servicios principales
+/* ===== Opciones de UI ===== */
 const SERVICE_CHIPS = [
   "Landing Page",
   "Aplicación Web",
   "Tienda Online",
   "Sitio Corporativo",
+  "Otros",
+];
+
+const EXTRA_CHIPS = [
   "Soporte & Mantención",
   "SEO & Performance",
+  "Cotizar (modo guiado)",
+  "Ver precios",
 ];
 
 const TIPO_CHIPS = ["Landing", "Corporativa", "Tienda", "App / Medida"];
@@ -41,114 +35,212 @@ const PRESUPUESTO_CHIPS = [
 ];
 const PLAZO_CHIPS = ["1–2 semanas", "3–4 semanas", "5+ semanas", "A definir"];
 
-export default function ChatPage() {
+export default function ChatDock() {
+  const [mounted, setMounted] = useState(false);
+  const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
+  const [unread, setUnread] = useState(0);
   const [wizard, setWizard] = useState<WizardState>({
     active: false,
     step: 0,
     data: { tipo: "", negocio: "", presupuesto: "", plazo: "" },
   });
-  const [wizardLast, setWizardLast] = useState<WizardData | null>(null);
-  const [isSending, setIsSending] = useState(false);
-  const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; msg: string }>({
-    show: false,
-    type: "success",
-    msg: "",
-  });
 
-  const toastTimerRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToast({ show: true, type, msg });
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => {
-      setToast((t) => ({ ...t, show: false }));
-    }, 3000);
-  };
-
-  // Cargar historial al montar
+  /* ===== Montaje y portal ===== */
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Msg[];
-        if (Array.isArray(parsed) && parsed.length) {
-          setMessages(parsed);
-          return;
-        }
-      }
-    } catch { }
-
-    // Saludo inicial
-    initHello();
-
-    // Cargar wizard si existe
-    try {
-      const wraw = localStorage.getItem(WIZARD_KEY);
-      if (wraw) {
-        const w = JSON.parse(wraw) as WizardState;
-        if (w && typeof w === "object") setWizard(w);
-      }
-    } catch { }
-
-    try {
-      const lraw = localStorage.getItem(WIZARD_LAST_KEY);
-      if (lraw) {
-        const lw = JSON.parse(lraw) as WizardData | null;
-        if (lw) setWizardLast(lw);
-      }
-    } catch { }
+    setMounted(true);
+    let el = document.getElementById("vc-root") as HTMLElement | null;
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "vc-root";
+      document.body.appendChild(el);
+    }
+    setPortalEl(el);
   }, []);
 
-  function initHello() {
-    addAssistant("Hola 👋 ¿Cómo te ayudo hoy?");
-    addAssistant("¿Qué necesitas? Elige un servicio:", SERVICE_CHIPS);
-    addAssistant("También puedo:", ["Cotizar (modo guiado)", "Soporte técnico", "Ver precios"]);
-  }
-
-  // Guardar historial
+  /* ===== Mensaje inicial ===== */
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-    } catch { }
-  }, [messages]);
+    if (!mounted) return;
+    if (messages.length === 0) {
+      addAssistant("Hola 👋 ¿Cómo te ayudo hoy? Elige una opción:", SERVICE_CHIPS);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted]);
 
+  /* ===== Lock scroll al abrir y reset de badge ===== */
   useEffect(() => {
-    try {
-      localStorage.setItem(WIZARD_KEY, JSON.stringify(wizard));
-    } catch { }
-  }, [wizard]);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = open ? "hidden" : (prev || "");
+    if (open) setUnread(0);
+    return () => {
+      document.body.style.overflow = prev || "";
+    };
+  }, [open]);
 
-  // Auto-scroll
+  /* ===== Autoscroll ===== */
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, typing]);
+  }, [messages, open]);
 
-  const think = async (ms = 800) => new Promise((r) => setTimeout(r, ms));
-
+  /* ===== Helpers ===== */
   function addAssistant(text: string, chips?: string[]) {
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", text, chips }]);
+    setMessages((p) => [...p, { id: crypto.randomUUID(), role: "assistant", text, chips }]);
+    if (!open) setUnread((n) => Math.min(9, n + 1));
+  }
+  function addUser(text: string) {
+    setMessages((p) => [...p, { id: crypto.randomUUID(), role: "user", text }]);
   }
 
-  function addUser(text: string) {
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
+  const waText = useMemo(
+    () => buildWizardMessageOrSummary(wizard.data, messages),
+    [wizard.data, messages]
+  );
+  const phone = WA_PHONE || "56912345678";
+  const waLink = `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`;
+
+  /* ✅ FIX WHATSAPP: abrir en pestaña nueva sin cambiar esta */
+  function openWhatsAppSafe(waUrl: string, e?: React.MouseEvent | Event) {
+    try {
+      if (e) {
+        // @ts-ignore
+        if (e.preventDefault) e.preventDefault();
+        // @ts-ignore
+        if (e.stopPropagation) e.stopPropagation();
+      }
+      const win = window.open(waUrl, "_blank", "noopener,noreferrer");
+      if (win) win.opener = null;
+    } catch {
+      // fallback menor: copiar URL
+      // @ts-ignore
+      navigator.clipboard?.writeText(waUrl).catch(() => { });
+    }
+  }
+
+  function resetChat(scrollTop = false) {
+    setWizard({ active: false, step: 0, data: { tipo: "", negocio: "", presupuesto: "", plazo: "" } });
+    setMessages([]);
+    setTimeout(() => {
+      addAssistant("Hola 👋 ¿Cómo te ayudo hoy? Elige una opción:", SERVICE_CHIPS);
+    }, 0);
+    if (scrollTop) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function startWizard() {
-    setWizard({
-      active: true,
-      step: 1,
-      data: { tipo: "", negocio: "", presupuesto: "", plazo: "" },
-    });
+    setWizard({ active: true, step: 1, data: { tipo: "", negocio: "", presupuesto: "", plazo: "" } });
     addAssistant("**Paso 1/4:** ¿Qué tipo de proyecto necesitas?", TIPO_CHIPS);
   }
 
-  async function handleWizardInput(userText: string) {
+  function showExtras() {
+    addAssistant("Selecciona una opción adicional:", EXTRA_CHIPS);
+  }
+
+  function showPricing() {
+    addAssistant(
+      [
+        "**Guía de precios referencial:**",
+        "• Landing Page: **$150.000 – $280.000**",
+        "• Sitio Corporativo: **$350.000 – $650.000**",
+        "• Tienda Online: **$600.000 – $1.200.000**",
+        "• Aplicación Web: **$900.000 – $2.000.000**",
+        "",
+        "¿Te interesa alguna opción?",
+      ].join("\n"),
+      ["Cotizar (modo guiado)", "Landing Page", "Tienda Online", "Volver al inicio"]
+    );
+  }
+
+  /* ===== Envío ===== */
+  async function send(textRaw?: string) {
+    const t = (textRaw ?? input).trim();
+    if (!t) return;
+    setInput("");
+    addUser(t);
+
+    const lower = t.toLowerCase();
+
+    // botón global "Enviar por WhatsApp"
+    if (lower.includes("enviar por whatsapp")) {
+      openWhatsAppSafe(waLink);
+      addAssistant("✅ Mensaje enviado por WhatsApp.", ["Volver al inicio"]);
+      return;
+    }
+
+    // volver al menú
+    if (lower.includes("volver")) {
+      resetChat(true);
+      return;
+    }
+
+    // flujo wizard
+    if (wizard.active) {
+      await handleWizardInput(t);
+      return;
+    }
+
+    // servicios
+    if (lower.includes("landing")) {
+      setWizard({ active: true, step: 2, data: { tipo: "Landing", negocio: "", presupuesto: "", plazo: "" } });
+      addAssistant("Perfecto: **Landing Page**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
+      return;
+    }
+    if (lower.includes("aplicación") || lower.includes("aplicacion") || lower.includes("app")) {
+      setWizard({ active: true, step: 2, data: { tipo: "Aplicación Web", negocio: "", presupuesto: "", plazo: "" } });
+      addAssistant("Perfecto: **Aplicación Web**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
+      return;
+    }
+    if (lower.includes("tienda")) {
+      setWizard({ active: true, step: 2, data: { tipo: "Tienda Online", negocio: "", presupuesto: "", plazo: "" } });
+      addAssistant("Perfecto: **Tienda Online**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
+      return;
+    }
+    if (lower.includes("corporativo") || lower.includes("corporativa")) {
+      setWizard({ active: true, step: 2, data: { tipo: "Sitio Corporativo", negocio: "", presupuesto: "", plazo: "" } });
+      addAssistant("Perfecto: **Sitio Corporativo**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
+      return;
+    }
+    if (lower.includes("otros")) {
+      showExtras();
+      return;
+    }
+
+    // extras
+    if (lower.includes("soporte")) {
+      addAssistant(
+        "Para **Soporte & Mantención**, cuéntame el problema o abre contacto directo:",
+        ["Abrir WhatsApp", "Volver al inicio"]
+      );
+      return;
+    }
+    if (lower.includes("seo")) {
+      addAssistant("Ofrecemos **SEO & Performance**. ¿Quieres cotizar?", [
+        "Cotizar (modo guiado)",
+        "Volver al inicio",
+      ]);
+      return;
+    }
+    if (lower.includes("precio")) {
+      showPricing();
+      return;
+    }
+    if (lower.includes("cotiz")) {
+      startWizard();
+      return;
+    }
+    if (lower.includes("whatsapp") || lower.includes("abrir whatsapp")) {
+      openWhatsAppSafe(waLink);
+      return;
+    }
+
+    addAssistant("Puedo ayudarte con:", SERVICE_CHIPS);
+  }
+
+  /* ===== Wizard ===== */
+  async function handleWizardInput(text: string) {
     const step = wizard.step;
-    const text = userText.trim();
     const lower = text.toLowerCase();
 
     if (step === 1) {
@@ -157,475 +249,268 @@ export default function ChatPage() {
       else if (lower.includes("corpor")) tipo = "Corporativa";
       else if (lower.includes("tienda")) tipo = "Tienda";
       else if (lower.includes("app")) tipo = "App / Medida";
-
-      const next = { ...wizard, step: 2, data: { ...wizard.data, tipo } };
-      setWizard(next);
-      setTyping(true);
-      await think(300);
-      setTyping(false);
-      addAssistant("**Paso 2/4:** Cuéntame el **rubro o negocio** (ej: restaurante, tienda…).");
+      setWizard((w) => ({ ...w, step: 2, data: { ...w.data, tipo } }));
+      addAssistant("**Paso 2/4:** Cuéntame el **rubro o negocio** (ej: restaurante, tienda, consultora…).");
       return;
     }
-
     if (step === 2) {
       const negocio = text || "No especificado";
-      const next = { ...wizard, step: 3, data: { ...wizard.data, negocio } };
-      setWizard(next);
-      setTyping(true);
-      await think(300);
-      setTyping(false);
+      setWizard((w) => ({ ...w, step: 3, data: { ...w.data, negocio } }));
       addAssistant("**Paso 3/4:** ¿Cuál es tu **presupuesto estimado**?", PRESUPUESTO_CHIPS);
       return;
     }
-
     if (step === 3) {
       let presupuesto = text;
       if (lower.includes("hasta")) presupuesto = "Hasta $300.000";
       else if (lower.includes("700")) presupuesto = "$300.000 – $700.000";
-      else if (lower.includes("1.500") || lower.includes("1500"))
-        presupuesto = "$700.000 – $1.500.000";
-      else if (lower.includes("+") || lower.includes("1.5")) presupuesto = "$1.500.000+";
+      else if (lower.includes("1.500") || lower.includes("1500")) presupuesto = "$700.000 – $1.500.000";
+      else if (lower.includes("+") || lower.includes("mas") || lower.includes("más")) presupuesto = "$1.500.000+";
       else if (lower.includes("defin")) presupuesto = "A definir";
-
-      const next = { ...wizard, step: 4, data: { ...wizard.data, presupuesto } };
-      setWizard(next);
-      setTyping(true);
-      await think(300);
-      setTyping(false);
+      setWizard((w) => ({ ...w, step: 4, data: { ...w.data, presupuesto } }));
       addAssistant("**Paso 4/4:** ¿Cuál es tu **plazo** objetivo?", PLAZO_CHIPS);
       return;
     }
-
     if (step === 4) {
       let plazo = text;
       if (lower.includes("1") || lower.includes("2")) plazo = "1–2 semanas";
       else if (lower.includes("3") || lower.includes("4")) plazo = "3–4 semanas";
       else if (lower.includes("5") || lower.includes("+")) plazo = "5+ semanas";
       else if (lower.includes("defin")) plazo = "A definir";
+      const data = { ...wizard.data, plazo };
+      setWizard({ active: false, step: 0, data });
+      const resumen = buildWizardSummary(data);
 
-      const done: WizardState = {
-        active: false,
-        step: 0,
-        data: { ...wizard.data, plazo },
-      };
-      setWizard(done);
-      setWizardLast(done.data);
-      try {
-        localStorage.setItem(WIZARD_LAST_KEY, JSON.stringify(done.data));
-      } catch { }
-
-      setTyping(true);
-      await think(400);
-      setTyping(false);
-
-      const resumen = buildWizardSummary(done.data);
+      // Al terminar, SOLO mostrar “Enviar por WhatsApp”
       addAssistant(
-        ["✅ **Resumen de tu cotización:**", resumen, "", "¿Quieres enviarlo por WhatsApp?"].join("\n"),
-        ["Enviar por WhatsApp", "Volver al inicio"]
-      );
-    }
-  }
-
-  async function replyTo(userText: string) {
-    if (wizard.active) {
-      await handleWizardInput(userText);
-      return;
-    }
-
-    setTyping(true);
-    await think(400);
-    const t = userText.toLowerCase();
-
-    // Detectar servicios principales
-    if (t.includes("landing")) {
-      setTyping(false);
-      addUser(userText);
-      addAssistant("Perfecto, una **Landing Page** enfocada en conversión. ¿Quieres cotizar?", [
-        "Cotizar (modo guiado)",
-        "Ver precios",
-        "Volver al inicio",
-      ]);
-      return;
-    }
-
-    if (t.includes("corporativo") || t.includes("corporativa")) {
-      setTyping(false);
-      addUser(userText);
-      addAssistant("Genial, un **Sitio Corporativo** con páginas internas. ¿Cotizamos?", [
-        "Cotizar (modo guiado)",
-        "Ver precios",
-        "Volver al inicio",
-      ]);
-      return;
-    }
-
-    if (t.includes("tienda") || t.includes("ecommerce")) {
-      setTyping(false);
-      addUser(userText);
-      addAssistant("Excelente, una **Tienda Online** con pagos. ¿Arrancamos cotización?", [
-        "Cotizar (modo guiado)",
-        "Ver precios",
-        "Volver al inicio",
-      ]);
-      return;
-    }
-
-    if (t.includes("app") || t.includes("aplicación") || t.includes("aplicacion")) {
-      setTyping(false);
-      addUser(userText);
-      addAssistant("Vamos con una **Aplicación Web** a medida. ¿Cotizamos?", [
-        "Cotizar (modo guiado)",
-        "Ver precios",
-        "Volver al inicio",
-      ]);
-      return;
-    }
-
-    if (t.includes("cotiz")) {
-      setTyping(false);
-      addUser(userText);
-      startWizard();
-      return;
-    }
-
-    if (t.includes("soporte")) {
-      setTyping(false);
-      addUser(userText);
-      addAssistant("Claro, soporte técnico ⚙️. Cuéntame el problema o abre WhatsApp.", [
-        "Abrir WhatsApp",
-        "Volver al inicio",
-      ]);
-      return;
-    }
-
-    if (t.includes("precio")) {
-      setTyping(false);
-      addUser(userText);
-      addAssistant(
-        [
-          "Guía referencial:",
-          "• Landing: desde $300.000",
-          "• Corporativa: desde $700.000",
-          "• Tienda: desde $1.200.000",
-          "• App/Medida: a evaluar",
-        ].join("\n"),
-        ["Cotizar (modo guiado)", "Volver al inicio"]
+        ["✅ **Cotización lista:**", resumen, "", "¿Deseas enviarla por WhatsApp?"].join("\n"),
+        ["Enviar por WhatsApp"]
       );
       return;
     }
-
-    if (t.includes("volver") || t.includes("inicio")) {
-      setTyping(false);
-      addUser(userText);
-      addAssistant("¿Qué necesitas ahora?", SERVICE_CHIPS);
-      return;
-    }
-
-    if (t.includes("whatsapp")) {
-      setTyping(false);
-      addUser(userText);
-      const waLink = wizardLast ? buildWhatsAppLink(wizardLast) : buildWhatsAppLink(null);
-      window.open(waLink, "_blank");
-      showToast("¡WhatsApp abierto! 🚀", "success");
-      return;
-    }
-
-    setTyping(false);
-    addUser(userText);
-    addAssistant("Puedo ayudarte con estos servicios:", SERVICE_CHIPS);
-    addAssistant("O también:", ["Cotizar (modo guiado)", "Soporte técnico", "Ver precios"]);
   }
 
-  function send(textRaw?: string) {
-    const text = (textRaw ?? input).trim();
-    if (!text) return;
-    setInput("");
-    replyTo(text);
-  }
-
-  function buildWhatsAppLink(data: WizardData | null) {
-    const text = data ? buildWizardMessage(data) : buildChatSummary(messages);
-    return `https://wa.me/${WA_PHONE}?text=${encodeURIComponent(text)}`;
-  }
-
-  async function sendWhatsAppAndEmail() {
-    if (isSending) return;
-    const link = buildWhatsAppLink(wizardLast);
-
-    // Detectar si es móvil
-    const ua = navigator.userAgent || "";
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
-
-    if (isMobile) {
-      // En móvil: navegar en misma pestaña (evita pestaña vacía)
-      window.location.href = link;
-    } else {
-      // En desktop: SOLO abrir nueva pestaña, NO navegar la actual
-      const newWin = window.open(link, "_blank", "noopener,noreferrer");
-      if (newWin) newWin.opener = null; // Seguridad extra
-    }
-
-    showToast("¡WhatsApp abierto! 🚀", "success");
-  }
-
-  const clearHistory = () => {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(WIZARD_KEY);
-      localStorage.removeItem(WIZARD_LAST_KEY);
-    } catch { }
-
-    setWizard({ active: false, step: 0, data: { tipo: "", negocio: "", presupuesto: "", plazo: "" } });
-    setWizardLast(null);
-    setMessages([]);
-    initHello();
-  };
-
-  return (
-    <main style={{
-      position: "relative",
-      width: "100%",
-      height: "100vh",
-      display: "grid",
-      gridTemplateRows: "auto 1fr auto",
-      overflow: "hidden",
-      background: "#020617",
-      fontFamily: "system-ui, -apple-system, sans-serif"
-    }}>
-      {/* Topbar */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "auto 1fr auto",
-        alignItems: "center",
-        gap: "1rem",
-        padding: "1rem 1.5rem",
-        background: "rgba(6, 12, 24, 0.95)",
-        borderBottom: "1px solid rgba(173, 216, 255, 0.15)",
-        backdropFilter: "blur(12px)",
-        zIndex: 10,
-      }}>
+  /* ===== UI ===== */
+  const UI = (
+    <div className="vc-root" aria-live="polite">
+      {/* FAB */}
+      {!open && (
         <button
-          onClick={() => window.history.back()}
-          style={{
-            background: "rgba(255, 255, 255, 0.1)",
-            color: "#fff",
-            padding: "0.5rem 1rem",
-            borderRadius: "8px",
-            border: "1px solid rgba(255, 255, 255, 0.2)",
-            cursor: "pointer",
-            fontWeight: 700,
-            fontSize: "0.9rem",
-          }}
+          className="vc-fab"
+          onClick={() => setOpen(true)}
+          aria-label="Abrir chat"
+          title="Chat"
         >
-          ← Volver
+          <span className="vc-fab-icon"><RobotIcon /></span>
+          {unread > 0 && <span className="vc-badge">{unread >= 9 ? "9+" : unread}</span>}
         </button>
-
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-          color: "#eaf6ff",
-          fontWeight: 900,
-          fontSize: "1.1rem",
-          letterSpacing: "0.3px",
-        }}>
-          <span style={{
-            width: "10px",
-            height: "10px",
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, #22c55e, #16a34a)",
-            boxShadow: "0 0 12px rgba(34, 197, 94, 0.6)",
-          }} />
-          Asistente Velocity
-        </div>
-
-        <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
-          <button
-            onClick={sendWhatsAppAndEmail}
-            disabled={isSending}
-            style={{
-              background: "linear-gradient(135deg, #22c55e, #16a34a)",
-              color: "white",
-              padding: "0.65rem 1.2rem",
-              borderRadius: "999px",
-              fontWeight: 800,
-              border: "1px solid rgba(255, 255, 255, 0.25)",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-            }}
-          >
-            {isSending ? "Enviando…" : "WhatsApp"}
-          </button>
-
-          <button
-            onClick={clearHistory}
-            style={{
-              background: "rgba(255, 255, 255, 0.1)",
-              color: "#fff",
-              padding: "0.65rem 1rem",
-              borderRadius: "999px",
-              border: "1px solid rgba(255, 255, 255, 0.2)",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "0.9rem",
-            }}
-          >
-            Borrar
-          </button>
-        </div>
-      </div>
-
-      {/* Fondo animado */}
-      <NeonGridBackground />
-
-      {/* Lista de mensajes */}
-      <div
-        ref={listRef}
-        style={{
-          position: "relative",
-          zIndex: 5,
-          overflowY: "auto",
-          padding: "1.5rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-        }}
-      >
-        {messages.map((m) => (
-          <Bubble key={m.id} role={m.role} text={m.text} chips={m.chips} onChipClick={send} />
-        ))}
-        {typing && <Typing />}
-      </div>
-
-      {/* Input bar */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-        style={{
-          position: "relative",
-          zIndex: 10,
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
-          gap: "0.75rem",
-          padding: "1rem 1.5rem",
-          background: "rgba(6, 12, 24, 0.95)",
-          borderTop: "1px solid rgba(173, 216, 255, 0.15)",
-          backdropFilter: "blur(12px)",
-        }}
-      >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={wizard.active ? wizardPrompt(wizard.step) : "Escribe aquí…"}
-          style={{
-            height: "48px",
-            borderRadius: "12px",
-            padding: "0 1rem",
-            color: "#eaf6ff",
-            background: "rgba(255, 255, 255, 0.08)",
-            border: "1px solid rgba(173, 216, 255, 0.28)",
-            fontSize: "1rem",
-          }}
-        />
-        <button
-          type="submit"
-          style={{
-            height: "48px",
-            padding: "0 1.5rem",
-            borderRadius: "12px",
-            border: "none",
-            color: "#fff",
-            fontWeight: 800,
-            cursor: "pointer",
-            background: "linear-gradient(135deg, #06b6d4, #a855f7)",
-            fontSize: "1rem",
-          }}
-        >
-          Enviar
-        </button>
-      </form>
-
-      {/* Toast */}
-      {toast.show && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "20px",
-            right: "20px",
-            background: toast.type === "success" ? "#22c55e" : "#ef4444",
-            color: "white",
-            padding: "1rem 1.5rem",
-            borderRadius: "12px",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.3)",
-            fontWeight: 800,
-            zIndex: 9999,
-          }}
-        >
-          {toast.msg}
-        </div>
       )}
-    </main>
+
+      {/* Overlay */}
+      <div className={`vc-overlay ${open ? "show" : ""}`} onClick={() => setOpen(false)} aria-hidden="true" />
+
+      {/* Dock */}
+      <aside className={`vc-dock ${open ? "open" : ""}`} role="dialog" aria-modal="true" aria-label="Chat Velocity">
+        <header className="vc-head">
+          <div className="vc-brand">
+            <span className="vc-avatar brand"><RobotIcon /></span>
+            <span>Velocity Chat</span>
+          </div>
+          <button className="vc-x" onClick={() => setOpen(false)} aria-label="Cerrar chat">✕</button>
+        </header>
+
+        <div className="vc-body" ref={listRef} role="log" aria-live="polite">
+          {messages.map((m) => (
+            <Bubble
+              key={m.id}
+              role={m.role}
+              text={m.text}
+              chips={m.chips}
+              onChipClick={(c) => {
+                if (c === "Abrir WhatsApp" || c === "Enviar por WhatsApp") {
+                  openWhatsAppSafe(waLink);
+                  if (c === "Enviar por WhatsApp") {
+                    addAssistant("✅ Mensaje enviado por WhatsApp.", ["Volver al inicio"]);
+                  }
+                } else if (c === "Volver al inicio") {
+                  resetChat(true);
+                } else if (c === "Otros") {
+                  showExtras();
+                } else {
+                  send(c);
+                }
+              }}
+            />
+          ))}
+        </div>
+
+        <form
+          className="vc-inputbar"
+          onSubmit={(e) => { e.preventDefault(); send(); }}
+        >
+          <input
+            className="vc-input"
+            placeholder={wizard.active ? placeholderByStep(wizard.step) : "Escribe tu mensaje..."}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            aria-label="Mensaje"
+          />
+          <button className="vc-send" type="submit">→</button>
+        </form>
+      </aside>
+
+      {/* ==== ESTILOS (GLOBAL EN EL COMPONENTE) ==== */}
+      <style jsx global>{`
+        .vc-root * { box-sizing: border-box !important; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif !important; }
+        :root{
+          --neo1:#8b5cf6; --neo2:#06b6d4;
+          --glass:rgba(15,23,42,.95);
+          --bg:#0b1324; --text:#f1f5f9; --text-2:#cbd5e1;
+        }
+
+        /* FAB a la IZQUIERDA/ABAJO */
+        .vc-fab{
+          position:fixed; left:18px; bottom:18px;
+          width:60px; height:60px; border-radius:999px;
+          display:grid; place-items:center; cursor:pointer;
+          background:linear-gradient(135deg,var(--neo1),var(--neo2));
+          border:2px solid rgba(255,255,255,.2);
+          box-shadow:0 10px 30px rgba(139,92,246,.35), 0 4px 12px rgba(0,0,0,.3);
+          z-index:2147483000; transition:transform .25s ease, box-shadow .25s ease;
+        }
+        .vc-fab:hover{ transform:translateY(-2px) scale(1.05); box-shadow:0 14px 40px rgba(139,92,246,.45), 0 6px 16px rgba(0,0,0,.35); }
+        .vc-fab-icon svg{ width:24px; height:24px; filter:brightness(0) invert(1); }
+        .vc-badge{ position:absolute; top:-4px; right:-4px; width:20px; height:20px; border-radius:999px; background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; font-size:10px; font-weight:900; display:grid; place-items:center; border:2px solid var(--bg); }
+
+        /* Overlay con cursor visible */
+        .vc-overlay{ position:fixed; inset:0; background:rgba(3,7,18,.55); backdrop-filter:blur(6px); opacity:0; pointer-events:none; transition:opacity .25s ease; z-index:2147482998; cursor:pointer; }
+        .vc-overlay.show{ opacity:1; pointer-events:auto; }
+
+        /* Dock COMPACTO pegado izquierda/abajo (desktop) */
+        .vc-dock{
+          position:fixed;
+          left:18px; bottom:18px;
+          width:min(380px,86vw);
+          height:min(620px,78vh);
+          transform:translateX(-110%); /* totalmente oculto sin “asomar” */
+          background:var(--glass); backdrop-filter:blur(18px) saturate(160%);
+          border:1px solid rgba(255,255,255,.12);
+          border-radius:18px;
+          box-shadow:0 24px 60px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.06) inset;
+          z-index:2147482999;
+          display:grid; grid-template-rows:auto 1fr auto;
+          transition:transform .32s cubic-bezier(.4,.0,.2,1);
+          overflow:hidden;
+        }
+        .vc-dock.open{ transform:translateX(0); }
+
+        /* Mobile: bottom-sheet */
+        @media (max-width: 768px){
+          .vc-dock{
+            left:50%; bottom:0; width:100vw; height:88vh;
+            transform:translate(-50%,100%);
+            border-radius:16px 16px 0 0;
+          }
+          .vc-dock.open{ transform:translate(-50%,0); }
+          .vc-fab{ left:16px; bottom:16px; width:56px; height:56px; }
+        }
+
+        .vc-head{
+          display:flex; align-items:center; justify-content:space-between;
+          padding:14px 16px; background:rgba(30,41,59,.5);
+          border-bottom:1px solid rgba(255,255,255,.1);
+          color:var(--text);
+        }
+        .vc-brand{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:1.05rem; letter-spacing:.2px; }
+        .vc-avatar{ width:24px; height:24px; border-radius:999px; display:grid; place-items:center; background:linear-gradient(135deg,var(--neo1),var(--neo2)); }
+        .vc-avatar svg{ width:14px; height:14px; filter:brightness(0) invert(1); }
+        .vc-x{ width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,.12); color:#fff; border:0; cursor:pointer; display:grid; place-items:center; }
+        .vc-x:hover{ background:rgba(255,255,255,.18); }
+
+        .vc-body{ padding:14px; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+
+        .vc-inputbar{ display:flex; gap:10px; padding:14px 16px; background:rgba(30,41,59,.5); border-top:1px solid rgba(255,255,255,.1); }
+        .vc-input{
+          flex:1; height:44px; border-radius:12px; padding:0 14px;
+          background:rgba(255,255,255,.08);
+          border:1px solid rgba(255,255,255,.18);
+          color:var(--text); font-size:.95rem;
+        }
+        .vc-input::placeholder{ color:var(--text-2); }
+        .vc-send{
+          width:44px; height:44px; border-radius:12px;
+          background:linear-gradient(135deg,var(--neo1),var(--neo2));
+          color:#fff; border:0; font-weight:800; cursor:pointer;
+        }
+        .vc-send:hover{ box-shadow:0 6px 18px rgba(139,92,246,.35); }
+
+        /* Burbujas */
+        .vc-bubble{ display:flex; flex-direction:column; max-width:86%; }
+        .vc-assistant{ align-self:flex-start; }
+        .vc-user{ align-self:flex-end; }
+        .vc-inner{
+          border-radius:18px; padding:10px 14px; line-height:1.5; font-size:.95rem; white-space:pre-wrap; word-break:break-word;
+        }
+        .vc-assistant .vc-inner{
+          background:rgba(255,255,255,.96); color:#1e293b;
+          border:1px solid rgba(255,255,255,.22);
+          border-bottom-left-radius:6px;
+        }
+        .vc-user .vc-inner{
+          background:linear-gradient(135deg,var(--neo1),var(--neo2));
+          color:#fff; border:1px solid rgba(255,255,255,.2);
+          border-bottom-right-radius:6px;
+        }
+
+        /* Chips: 2 por fila en desktop, 1 en móvil */
+        .vc-chips{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+        @media (max-width:768px){ .vc-chips{ grid-template-columns:1fr; } }
+        .vc-chip{
+          border:0; border-radius:999px; padding:10px 14px;
+          background:rgba(255,255,255,.1); color:var(--text);
+          border:1px solid rgba(255,255,255,.2);
+          font-weight:700; font-size:.9rem; text-align:center; cursor:pointer;
+          backdrop-filter:blur(10px);
+        }
+        .vc-chip:hover{ background:rgba(255,255,255,.16); transform:translateY(-1px); }
+
+        .vc-chip.whatsapp-chip{
+          background:linear-gradient(135deg,#22c55e,#16a34a);
+          color:#fff; border:1px solid rgba(34,197,94,.32);
+          grid-column:1 / -1;
+        }
+        .vc-chip.whatsapp-chip:hover{
+          background:linear-gradient(135deg,#16a34a,#15803d);
+          box-shadow:0 6px 18px rgba(34,197,94,.32);
+        }
+
+        /* Scrollbar */
+        .vc-body::-webkit-scrollbar{ width:6px; }
+        .vc-body::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.22); border-radius:3px; }
+        .vc-body::-webkit-scrollbar-track{ background:rgba(255,255,255,.06); border-radius:3px; }
+      `}</style>
+    </div>
   );
+
+  if (!mounted || !portalEl) return null;
+  return createPortal(UI, portalEl);
 }
 
-function Bubble({ role, text, chips, onChipClick }: { role: Role; text: string; chips?: string[]; onChipClick?: (s: string) => void }) {
-  const isUser = role === "user";
+/* ===== Subcomponentes ===== */
+function Bubble({
+  role, text, chips, onChipClick,
+}: { role: Role; text: string; chips?: string[]; onChipClick?: (c: string) => void }) {
+  const isAssistant = role === "assistant";
   return (
-    <div
-      style={{
-        maxWidth: "85%",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.75rem",
-        alignSelf: isUser ? "flex-end" : "flex-start",
-      }}
-    >
-      <div
-        dangerouslySetInnerHTML={{ __html: mdToHtml(text) }}
-        style={{
-          borderRadius: "14px",
-          padding: "1rem 1.25rem",
-          lineHeight: 1.65,
-          fontSize: "1rem",
-          boxShadow: "0 2px 12px rgba(0, 0, 0, 0.15)",
-          background: isUser ? "rgba(6, 182, 212, 0.2)" : "rgba(255, 255, 255, 0.98)",
-          color: isUser ? "#eaf6ff" : "#0f172a",
-          border: isUser ? "1px solid rgba(6, 182, 212, 0.45)" : "1px solid rgba(15, 23, 42, 0.12)",
-          borderLeft: isUser ? undefined : "3px solid #06b6d4",
-        }}
-      />
+    <div className={`vc-bubble ${isAssistant ? "vc-assistant" : "vc-user"}`}>
+      <div className="vc-inner" dangerouslySetInnerHTML={{ __html: md(text) }} />
       {!!chips?.length && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem" }}>
+        <div className="vc-chips">
           {chips.map((c) => (
             <button
               key={c}
+              type="button"
+              className={`vc-chip ${c.includes("WhatsApp") ? "whatsapp-chip" : ""}`}
               onClick={() => onChipClick?.(c)}
-              style={{
-                border: "1px solid rgba(15, 23, 42, 0.15)",
-                borderRadius: "999px",
-                padding: "0.75rem 1.25rem",
-                fontWeight: 800,
-                fontSize: "0.95rem",
-                cursor: "pointer",
-                color: "#0b1220",
-                background: "linear-gradient(135deg, #ffffff, #f1f5f9)",
-                boxShadow: "0 4px 14px rgba(6, 182, 212, 0.2)",
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 6px 20px rgba(6, 182, 212, 0.35)";
-                e.currentTarget.style.background = "linear-gradient(135deg, #22d3ee, #06b6d4)";
-                e.currentTarget.style.color = "#001219";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 4px 14px rgba(6, 182, 212, 0.2)";
-                e.currentTarget.style.background = "linear-gradient(135deg, #ffffff, #f1f5f9)";
-                e.currentTarget.style.color = "#0b1220";
-              }}
             >
               {c}
             </button>
@@ -636,133 +521,46 @@ function Bubble({ role, text, chips, onChipClick }: { role: Role; text: string; 
   );
 }
 
-function Typing() {
+function RobotIcon() {
   return (
-    <div style={{
-      display: "flex",
-      gap: "6px",
-      padding: "1rem",
-      background: "rgba(255, 255, 255, 0.95)",
-      borderRadius: "14px",
-      width: "fit-content",
-    }}>
-      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#06b6d4", animation: "bounce 1.4s infinite ease-in-out both", animationDelay: "-0.32s" }} />
-      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#06b6d4", animation: "bounce 1.4s infinite ease-in-out both", animationDelay: "-0.16s" }} />
-      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#06b6d4", animation: "bounce 1.4s infinite ease-in-out both" }} />
-      <style>{`
-        @keyframes bounce {
-          0%, 80%, 100% { transform: scale(0); }
-          40% { transform: scale(1); }
-        }
-      `}</style>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="7" width="18" height="12" rx="3" stroke="currentColor" strokeWidth="2" />
+      <circle cx="9" cy="13" r="2" fill="currentColor" />
+      <circle cx="15" cy="13" r="2" fill="currentColor" />
+      <rect x="10.5" y="3" width="3" height="4" rx="1" fill="currentColor" />
+    </svg>
   );
 }
 
-function NeonGridBackground() {
-  const ref = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    let raf = 0;
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-
-    const resize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-      canvas.style.width = w + "px";
-      canvas.style.height = h + "px";
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-    window.addEventListener("resize", resize, { passive: true });
-
-    const lines = Array.from({ length: 32 }, () => ({
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-      v: 0.4 + Math.random() * 0.8,
-      o: 0.08 + Math.random() * 0.15,
-    }));
-
-    const draw = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "rgba(2,6,23,0.98)";
-      ctx.fillRect(0, 0, w, h);
-
-      lines.forEach((p) => {
-        ctx.save();
-        ctx.strokeStyle = `rgba(6, 182, 212, ${p.o})`;
-        ctx.shadowColor = "rgba(6,182,212,0.2)";
-        ctx.shadowBlur = 3;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + 100, p.y + 100);
-        ctx.stroke();
-        ctx.restore();
-
-        p.x += p.v * 0.9;
-        p.y += p.v * 1;
-        if (p.x > w + 80) p.x = -80;
-        if (p.y > h + 80) p.y = -80;
-      });
-
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={ref}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        zIndex: 0,
-        pointerEvents: "none",
-      }}
-    />
-  );
-}
-
-function mdToHtml(s: string) {
+/* ===== Utils ===== */
+function md(s: string) {
   return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>");
 }
-
-function wizardPrompt(step: number) {
-  if (step === 1) return "Ej: Landing / Corporativa / Tienda / App";
-  if (step === 2) return "Ej: Restaurante, tienda…";
-  if (step === 3) return "Ej: $500.000 / A definir";
-  if (step === 4) return "Ej: 2 semanas / A definir";
-  return "Escribe aquí…";
+function placeholderByStep(step: number) {
+  if (step === 1) return "Elige tipo de proyecto...";
+  if (step === 2) return "Describe tu rubro o negocio...";
+  if (step === 3) return "Selecciona presupuesto...";
+  if (step === 4) return "Indica plazo estimado...";
+  return "Escribe tu mensaje...";
 }
-
-function buildChatSummary(msgs: Msg[]) {
-  const lines: string[] = ["Hola, vengo desde el chat:"];
-  msgs.forEach((m) => {
-    const plain = m.text.replace(/<[^>]+>/g, "");
-    lines.push(`${m.role === "user" ? "Yo" : "Bot"}: ${plain}`);
-  });
-  let text = lines.join("\n");
-  if (text.length > 900) text = text.slice(0, 900) + "…";
-  return text;
+function buildWizardSummary(d: WizardData) {
+  return [
+    `• Tipo: ${d.tipo || "—"}`,
+    `• Rubro/Negocio: ${d.negocio || "—"}`,
+    `• Presupuesto: ${d.presupuesto || "—"}`,
+    `• Plazo: ${d.plazo || "—"}`,
+  ].join("\n");
 }
-
-function buildWizardMessage(d: WizardData) {
+function buildWizardMessageOrSummary(d: WizardData, msgs: Msg[]) {
+  const hasWizard = d.tipo || d.negocio || d.presupuesto || d.plazo;
+  if (!hasWizard && msgs.length) {
+    const MAX = 900;
+    const lines = ["Hola, vengo desde el chat de Velocity. Resumen:"];
+    msgs.forEach((m) => lines.push(`${m.role === "user" ? "Yo" : "Asistente"}: ${m.text}`));
+    let txt = lines.join("\n");
+    if (txt.length > MAX) txt = txt.slice(0, MAX) + "…";
+    return txt;
+  }
   return (
     "Hola, quiero cotizar un proyecto:\n" +
     `• Tipo: ${d.tipo || "—"}\n` +
@@ -770,13 +568,4 @@ function buildWizardMessage(d: WizardData) {
     `• Presupuesto: ${d.presupuesto || "—"}\n` +
     `• Plazo: ${d.plazo || "—"}`
   );
-}
-
-function buildWizardSummary(d: WizardData) {
-  return [
-    `• Tipo: **${d.tipo || "—"}**`,
-    `• Rubro/Negocio: **${d.negocio || "—"}**`,
-    `• Presupuesto: **${d.presupuesto || "—"}**`,
-    `• Plazo: **${d.plazo || "—"}**`,
-  ].join("\n");
 }
