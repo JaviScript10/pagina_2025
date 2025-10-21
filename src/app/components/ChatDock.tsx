@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { WA_PHONE } from "../config";
+import { WA_PHONE } from "@/app/config";
 
 /* ===== Tipos ===== */
 type Role = "assistant" | "user";
@@ -82,10 +82,17 @@ export default function ChatDock() {
   /* Lock scroll al abrir y reset de badge */
   useEffect(() => {
     const prev = document.body.style.overflow;
-    document.body.style.overflow = open ? "hidden" : prev || "";
+
+    // aplica el lock cuando se abre
+    document.body.style.overflow = open ? "hidden" : (prev || "");
     if (open) setUnread(0);
-    return () => (document.body.style.overflow = prev || "");
+
+    // cleanup correcto (debe devolver void)
+    return () => {
+      document.body.style.overflow = prev || "";
+    };
   }, [open]);
+
 
   /* Autoscroll */
   useEffect(() => {
