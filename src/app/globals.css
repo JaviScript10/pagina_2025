@@ -1,6 +1,22 @@
 ﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import 'tailwindcss';
 
+/* ==== Arreglo anti-scroll lateral / Android ==== */
+:root, html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;               /* mejor que hidden en Chrome/Android */
+}
+
+@supports not (overflow: clip) {
+  :root, html, body { overflow-x: hidden; }
+}
+
+/* Los medios nunca deben “ensanchar” el viewport */
+img, canvas, video, iframe { max-width: 100%; }
+
+
+
 /* ===== CONFIGURACIÓN GLOBAL ===== */
 * {
   margin: 0;
@@ -1326,11 +1342,35 @@ section[id] {
   /* ajusta si tu header es más alto/bajo */
 }
 
-/* Fix para el chat flotante */
+/* Portal del chat fijo y sin interferir con el layout */
 #vc-root {
-  position: relative;
-  z-index: 2147483000 !important;
+  position: fixed !important;
+  inset: 0 !important;
+  pointer-events: none !important;           /* el contenedor no bloquea clics */
+  z-index: 2147482997 !important;
 }
+.vc-fab, .vc-overlay, .vc-dock, .vc-toast {
+  pointer-events: auto !important;           /* los elementos interactivos sí */
+}
+
+/* Botón flotante de WhatsApp: siempre visible y dentro del viewport */
+.wsp-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483002;
+  inset-inline-end: 16px;
+  transform: translateZ(0);
+}
+
+@media (max-width: 768px) {
+  .wsp-fab {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+
 
 .vc-fab {
   position: fixed !important;
@@ -1364,9 +1404,18 @@ section[id] {
   }
 }
 
-/* ⬇ AGREGA ESTO para Android también */
+/* === Ajustes móviles === */
 @media (max-width: 768px) {
-  .vc-input {
-    font-size: 16px !important; /* Evita auto-zoom en Android */
-  }
+  .vc-input { font-size: 16px !important; } /* evita zoom en Android/iPhone */
+}
+
+/* === Viewport seguro para Android/iOS === */
+body {
+  padding-left: max(0px, env(safe-area-inset-left));
+  padding-right: max(0px, env(safe-area-inset-right));
+}
+
+/* === Desactiva cursor en móviles === */
+@media (max-width: 920px) {
+  #cursor { display: none !important; }
 }
