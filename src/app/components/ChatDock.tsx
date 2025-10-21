@@ -137,12 +137,31 @@ export default function ChatDock() {
   const phone = WA_PHONE || "56912345678";
   const waLink = `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`;
 
+  // Reemplaza tu openWhatsApp por este
   const openWhatsApp = () => {
-    // abrir en gesto directo para iOS
-    window.open(waLink, "_blank", "noopener,noreferrer");
-    // Toast y opciones minimal luego de enviar
+    // Mostrar confirmación en el chat (se verá al volver)
     addAssistant("✅ Mensaje enviado por WhatsApp.", ["Volver al inicio"]);
+
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const isMobile = isIOS || isAndroid;
+
+    try {
+      if (isMobile) {
+        // En móvil (iOS/Android) navegar en la misma pestaña evita la “pestaña en blanco”
+        window.location.href = waLink;
+      } else {
+        // En desktop abrir en nueva pestaña; si el popup es bloqueado, fallback a misma pestaña
+        const win = window.open(waLink, "_blank", "noopener,noreferrer");
+        if (!win) window.location.href = waLink;
+      }
+    } catch {
+      // Fallback ante cualquier error
+      window.location.href = waLink;
+    }
   };
+
 
   async function send(textRaw?: string) {
     const t = (textRaw ?? input).trim();
