@@ -1338,3 +1338,21 @@ section[id] {
   bottom: 30px !important;
   z-index: 2147483000 !important;
 }
+
+/* === ChatDock – asegurar cursor visible dentro del chat aunque el sitio use cursor custom === */
+#vc-root,
+#vc-root * {
+  cursor: default !important;
+}
+
+/* === iOS: evitar auto-zoom en input al abrir teclado (16px) === */
+@supports (-webkit-touch-callout: none) {
+  #vc-root .vc-input {
+    font-size: 16px !important;
+  }
+}
+
+/* === Viewport seguro para iPhone con notch === */
+:root {
+  /* ya tienes viewport-fit=cover en <head>? si no, agrega la meta en layout.tsx */
+}
