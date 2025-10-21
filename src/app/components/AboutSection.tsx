@@ -22,7 +22,7 @@ export default function AboutSection() {
                     </p>
                     <div className="about-cta">
                         <a href="#projects" className="btn-primary">Proyectos</a>
-                        <a href="#contact" className="btn-ghost">Hablemos</a>
+                        <a href="#cotizar" className="btn-ghost">Hablemos</a>
                     </div>
 
                     {/* Mini stats */}
@@ -97,9 +97,9 @@ export default function AboutSection() {
 
                     <div className="team-grid" style={{ perspective: 1200 }}>
                         {[
-                            { img: "/team-ux.jpg", name: "Carla", role: "UX/UI" },
-                            { img: "/team-seo.jpg", name: "Leo", role: "SEO & Contenido" },
-                            { img: "/team-dev.jpg", name: "Maca", role: "Front-end" }
+                            { img: "/team-ux.jpg", name: "Javier", role: "UX/UI" },
+                            { img: "/team-seo.jpg", name: "Camilo", role: "SEO & Contenido" },
+                            { img: "/team-dev.jpg", name: "Maximiliano", role: "Front-end" }
                         ].map((m, i) => (
                             <div className="member tilt" key={i} tabIndex={0}>
                                 <div className="avatar small">
