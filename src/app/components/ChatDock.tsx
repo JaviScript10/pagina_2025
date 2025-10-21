@@ -1,13 +1,35 @@
-"use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { WA_PHONE } from "../config";
+
+// Constantes
+const WA_PHONE = "56912345678"; // Cambia por tu número real
+const STORAGE_KEY = "velocity_chat_history_v1";
+const WIZARD_KEY = "velocity_chat_wizard_v1";
+const WIZARD_LAST_KEY = "velocity_chat_wizard_last_result_v1";
 
 type Role = "assistant" | "user";
 type Msg = { id: string; role: Role; text: string; chips?: string[] };
-type WizardData = { tipo: string; negocio: string; presupuesto: string; plazo: string };
-type WizardState = { active: boolean; step: 0 | 1 | 2 | 3 | 4; data: WizardData };
+
+type WizardData = {
+  tipo: string;
+  negocio: string;
+  presupuesto: string;
+  plazo: string;
+};
+type WizardState = {
+  active: boolean;
+  step: number;
+  data: WizardData;
+};
+
+// Chips de servicios principales
+const SERVICE_CHIPS = [
+  "Landing Page",
+  "Aplicación Web",
+  "Tienda Online",
+  "Sitio Corporativo",
+  "Soporte & Mantención",
+  "SEO & Performance",
+];
 
 const TIPO_CHIPS = ["Landing", "Corporativa", "Tienda", "App / Medida"];
 const PRESUPUESTO_CHIPS = [
@@ -19,228 +41,115 @@ const PRESUPUESTO_CHIPS = [
 ];
 const PLAZO_CHIPS = ["1–2 semanas", "3–4 semanas", "5+ semanas", "A definir"];
 
-export default function ChatDock() {
-  const [mounted, setMounted] = useState(false);
-  const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
-
-  const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-
+export default function ChatPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
   const [wizard, setWizard] = useState<WizardState>({
     active: false,
     step: 0,
     data: { tipo: "", negocio: "", presupuesto: "", plazo: "" },
   });
+  const [wizardLast, setWizardLast] = useState<WizardData | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; msg: string }>({
+    show: false,
+    type: "success",
+    msg: "",
+  });
 
+  const toastTimerRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  // Portal en body
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToast({ show: true, type, msg });
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((t) => ({ ...t, show: false }));
+    }, 3000);
+  };
+
+  // Cargar historial al montar
   useEffect(() => {
-    setMounted(true);
-    let el = document.getElementById("vc-root") as HTMLElement | null;
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "vc-root";
-      document.body.appendChild(el);
-    }
-    setPortalEl(el);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Msg[];
+        if (Array.isArray(parsed) && parsed.length) {
+          setMessages(parsed);
+          return;
+        }
+      }
+    } catch { }
+
+    // Saludo inicial
+    initHello();
+
+    // Cargar wizard si existe
+    try {
+      const wraw = localStorage.getItem(WIZARD_KEY);
+      if (wraw) {
+        const w = JSON.parse(wraw) as WizardState;
+        if (w && typeof w === "object") setWizard(w);
+      }
+    } catch { }
+
+    try {
+      const lraw = localStorage.getItem(WIZARD_LAST_KEY);
+      if (lraw) {
+        const lw = JSON.parse(lraw) as WizardData | null;
+        if (lw) setWizardLast(lw);
+      }
+    } catch { }
   }, []);
 
-  // Mensaje inicial
-  useEffect(() => {
-    if (!mounted) return;
-    if (messages.length === 0) {
-      addAssistant(
-        "Hola 👋 ¿Cómo te ayudo hoy? Elige una opción:",
-        ["Landing Page", "Aplicación Web", "Tienda Online", "Sitio Corporativo", "Otros…"]
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted]);
+  function initHello() {
+    addAssistant("Hola 👋 ¿Cómo te ayudo hoy?");
+    addAssistant("¿Qué necesitas? Elige un servicio:", SERVICE_CHIPS);
+    addAssistant("También puedo:", ["Cotizar (modo guiado)", "Soporte técnico", "Ver precios"]);
+  }
 
-  /* Lock scroll al abrir y reset de badge */
+  // Guardar historial
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = open ? "hidden" : (prev || "");
-    if (open) setUnread(0);
-    return () => {
-      document.body.style.overflow = prev || "";
-    };
-  }, [open]);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch { }
+  }, [messages]);
 
-  // Autoscroll
+  useEffect(() => {
+    try {
+      localStorage.setItem(WIZARD_KEY, JSON.stringify(wizard));
+    } catch { }
+  }, [wizard]);
+
+  // Auto-scroll
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, open]);
+  }, [messages, typing]);
 
-  // iOS: marcar cuando el input tiene foco (ajuste de altura visual opcional)
-  useEffect(() => {
-    if (!open) return;
-    const inputEl = document.querySelector<HTMLInputElement>(".vc-input");
-    const onFocus = () => document.documentElement.classList.add("vc-kb");
-    const onBlur = () => document.documentElement.classList.remove("vc-kb");
-    inputEl?.addEventListener("focus", onFocus);
-    inputEl?.addEventListener("blur", onBlur);
-    return () => {
-      inputEl?.removeEventListener("focus", onFocus);
-      inputEl?.removeEventListener("blur", onBlur);
-      document.documentElement.classList.remove("vc-kb");
-    };
-  }, [open]);
+  const think = async (ms = 800) => new Promise((r) => setTimeout(r, ms));
 
   function addAssistant(text: string, chips?: string[]) {
-    setMessages((p) => [...p, { id: crypto.randomUUID(), role: "assistant", text, chips }]);
-    if (!open) setUnread((n) => Math.min(9, n + 1));
-  }
-  function addUser(text: string) {
-    setMessages((p) => [...p, { id: crypto.randomUUID(), role: "user", text }]);
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", text, chips }]);
   }
 
-  function resetChat(scrollTop = false) {
-    setWizard({ active: false, step: 0, data: { tipo: "", negocio: "", presupuesto: "", plazo: "" } });
-    setMessages([]);
-    setTimeout(() => {
-      addAssistant(
-        "Hola 👋 ¿Cómo te ayudo hoy? Elige una opción:",
-        ["Landing Page", "Aplicación Web", "Tienda Online", "Sitio Corporativo", "Otros…"]
-      );
-    }, 0);
-    if (scrollTop) window.scrollTo({ top: 0, behavior: "smooth" });
+  function addUser(text: string) {
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
   }
 
   function startWizard() {
-    setWizard({ active: true, step: 1, data: { tipo: "", negocio: "", presupuesto: "", plazo: "" } });
+    setWizard({
+      active: true,
+      step: 1,
+      data: { tipo: "", negocio: "", presupuesto: "", plazo: "" },
+    });
     addAssistant("**Paso 1/4:** ¿Qué tipo de proyecto necesitas?", TIPO_CHIPS);
   }
 
-  function showPricing() {
-    addAssistant(
-      [
-        "**Guía de precios referencial:**",
-        "• Landing Page: **$150.000 – $280.000**",
-        "• Sitio Corporativo: **$350.000 – $650.000**",
-        "• Tienda Online: **$600.000 – $1.200.000**",
-        "• Aplicación Web: **$900.000 – $2.000.000**",
-        "",
-        "¿Te interesa alguna opción?"
-      ].join("\n"),
-      ["Cotizar (modo guiado)", "Landing Page", "Tienda Online", "Volver al inicio"]
-    );
-  }
-
-  const waText = useMemo(
-    () => buildWizardMessageOrSummary(wizard.data, messages),
-    [wizard.data, messages]
-  );
-  const phone = WA_PHONE || "56912345678";
-  const waLink = `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`;
-
-  // Reemplaza tu openWhatsApp por este
-  const openWhatsApp = () => {
-    // Mostrar confirmación en el chat (se verá al volver)
-    addAssistant("✅ Mensaje enviado por WhatsApp.", ["Volver al inicio"]);
-
-    const ua = navigator.userAgent || "";
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    const isAndroid = /Android/i.test(ua);
-    const isMobile = isIOS || isAndroid;
-
-    try {
-      if (isMobile) {
-        // En móvil (iOS/Android) navegar en la misma pestaña evita la “pestaña en blanco”
-        window.location.href = waLink;
-      } else {
-        // En desktop abrir en nueva pestaña; si el popup es bloqueado, fallback a misma pestaña
-        const win = window.open(waLink, "_blank", "noopener,noreferrer");
-        if (!win) window.location.href = waLink;
-      }
-    } catch {
-      // Fallback ante cualquier error
-      window.location.href = waLink;
-    }
-  };
-
-
-  async function send(textRaw?: string) {
-    const t = (textRaw ?? input).trim();
-    if (!t) return;
-    setInput("");
-    addUser(t);
-
-    const lower = t.toLowerCase();
-
-    // Quick options de inicio
-    if (lower === "landing page" || lower.includes("landing")) {
-      setWizard({ active: true, step: 2, data: { tipo: "Landing", negocio: "", presupuesto: "", plazo: "" } });
-      addAssistant("Perfecto: **Landing Page**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
-      return;
-    }
-    if (lower === "aplicación web" || lower.includes("aplicación") || lower.includes("aplicacion") || lower.includes("app")) {
-      setWizard({ active: true, step: 2, data: { tipo: "App / Medida", negocio: "", presupuesto: "", plazo: "" } });
-      addAssistant("Perfecto: **Aplicación Web**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
-      return;
-    }
-    if (lower === "tienda online" || lower.includes("tienda") || lower.includes("ecommerce")) {
-      setWizard({ active: true, step: 2, data: { tipo: "Tienda", negocio: "", presupuesto: "", plazo: "" } });
-      addAssistant("Excelente: **Tienda Online**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
-      return;
-    }
-    if (lower === "sitio corporativo" || lower.includes("corporativo") || lower.includes("corporativa")) {
-      setWizard({ active: true, step: 2, data: { tipo: "Corporativa", negocio: "", presupuesto: "", plazo: "" } });
-      addAssistant("Genial: **Sitio Corporativo**.\n**Paso 2/4:** ¿Cuál es tu **rubro o negocio**?");
-      return;
-    }
-    if (lower === "otros…" || lower === "otros" || lower.includes("otros")) {
-      addAssistant("Elige una opción:", ["Soporte & Mantención", "SEO & Performance", "Cotizar (modo guiado)", "Ver precios", "Volver al inicio"]);
-      return;
-    }
-
-    // Secundarias
-    if (lower.includes("soporte")) {
-      addAssistant("Para **Soporte & Mantención** ⚙️ cuéntame el problema o abre WhatsApp.", ["Enviar por WhatsApp", "Volver al inicio"]);
-      return;
-    }
-    if (lower.includes("seo")) {
-      addAssistant("**SEO & Performance**: auditoría técnica, Core Web Vitals, contenidos y marcado. ¿Quieres cotizar?", ["Cotizar (modo guiado)", "Ver precios", "Volver al inicio"]);
-      return;
-    }
-    if (lower.includes("precio")) {
-      showPricing();
-      return;
-    }
-    if (lower.includes("cotiz")) {
-      startWizard();
-      return;
-    }
-    if (lower.includes("volver") || lower.includes("inicio") || lower === "menú" || lower === "menu") {
-      resetChat(true);
-      return;
-    }
-    if (lower.includes("whatsapp") || lower.includes("enviar por whatsapp") || lower.includes("abrir whatsapp")) {
-      openWhatsApp();
-      return;
-    }
-
-    // Si estoy dentro del wizard, enrutar
-    if (wizard.active) {
-      await handleWizardInput(t);
-      return;
-    }
-
-    // Fallback menú
-    addAssistant("Puedo ayudarte con:", ["Landing Page", "Aplicación Web", "Tienda Online", "Sitio Corporativo", "Otros…"]);
-  }
-
-  async function handleWizardInput(text: string) {
+  async function handleWizardInput(userText: string) {
     const step = wizard.step;
+    const text = userText.trim();
     const lower = text.toLowerCase();
-
-    if (lower.includes("enviar por whatsapp")) {
-      openWhatsApp();
-      return;
-    }
 
     if (step === 1) {
       let tipo = text;
@@ -248,28 +157,45 @@ export default function ChatDock() {
       else if (lower.includes("corpor")) tipo = "Corporativa";
       else if (lower.includes("tienda")) tipo = "Tienda";
       else if (lower.includes("app")) tipo = "App / Medida";
-      setWizard((w) => ({ ...w, step: 2, data: { ...w.data, tipo } }));
-      addAssistant("**Paso 2/4:** Cuéntame el **rubro o negocio** (ej: restaurante, tienda, consultora…).");
+
+      const next = { ...wizard, step: 2, data: { ...wizard.data, tipo } };
+      setWizard(next);
+      setTyping(true);
+      await think(300);
+      setTyping(false);
+      addAssistant("**Paso 2/4:** Cuéntame el **rubro o negocio** (ej: restaurante, tienda…).");
       return;
     }
+
     if (step === 2) {
       const negocio = text || "No especificado";
-      setWizard((w) => ({ ...w, step: 3, data: { ...w.data, negocio } }));
+      const next = { ...wizard, step: 3, data: { ...wizard.data, negocio } };
+      setWizard(next);
+      setTyping(true);
+      await think(300);
+      setTyping(false);
       addAssistant("**Paso 3/4:** ¿Cuál es tu **presupuesto estimado**?", PRESUPUESTO_CHIPS);
       return;
     }
+
     if (step === 3) {
       let presupuesto = text;
       if (lower.includes("hasta")) presupuesto = "Hasta $300.000";
       else if (lower.includes("700")) presupuesto = "$300.000 – $700.000";
-      else if (lower.includes("1.500") || lower.includes("1500")) presupuesto = "$700.000 – $1.500.000";
-      else if (lower.includes("+") || lower.includes("1.5") || lower.includes("más") || lower.includes("mas"))
-        presupuesto = "$1.500.000+";
+      else if (lower.includes("1.500") || lower.includes("1500"))
+        presupuesto = "$700.000 – $1.500.000";
+      else if (lower.includes("+") || lower.includes("1.5")) presupuesto = "$1.500.000+";
       else if (lower.includes("defin")) presupuesto = "A definir";
-      setWizard((w) => ({ ...w, step: 4, data: { ...w.data, presupuesto } }));
+
+      const next = { ...wizard, step: 4, data: { ...wizard.data, presupuesto } };
+      setWizard(next);
+      setTyping(true);
+      await think(300);
+      setTyping(false);
       addAssistant("**Paso 4/4:** ¿Cuál es tu **plazo** objetivo?", PLAZO_CHIPS);
       return;
     }
+
     if (step === 4) {
       let plazo = text;
       if (lower.includes("1") || lower.includes("2")) plazo = "1–2 semanas";
@@ -277,283 +203,429 @@ export default function ChatDock() {
       else if (lower.includes("5") || lower.includes("+")) plazo = "5+ semanas";
       else if (lower.includes("defin")) plazo = "A definir";
 
-      const data = { ...wizard.data, plazo };
-      setWizard({ active: false, step: 0, data });
+      const done: WizardState = {
+        active: false,
+        step: 0,
+        data: { ...wizard.data, plazo },
+      };
+      setWizard(done);
+      setWizardLast(done.data);
+      try {
+        localStorage.setItem(WIZARD_LAST_KEY, JSON.stringify(done.data));
+      } catch { }
 
-      const resumen = buildWizardSummary(data);
-      // Importante: aquí NO mostramos "Volver al inicio" todavía para evitar duplicados.
-      addAssistant(["✅ **Cotización lista:**", resumen, "", "¿La enviamos por WhatsApp?"].join("\n"), [
-        "Enviar por WhatsApp",
-      ]);
-      return;
+      setTyping(true);
+      await think(400);
+      setTyping(false);
+
+      const resumen = buildWizardSummary(done.data);
+      addAssistant(
+        ["✅ **Resumen de tu cotización:**", resumen, "", "¿Quieres enviarlo por WhatsApp?"].join("\n"),
+        ["Enviar por WhatsApp", "Volver al inicio"]
+      );
     }
   }
 
-  const UI = (
-    <div className="vc-root" aria-live="polite">
-      {/* FAB izquierdo */}
-      {!open && (
+  async function replyTo(userText: string) {
+    if (wizard.active) {
+      await handleWizardInput(userText);
+      return;
+    }
+
+    setTyping(true);
+    await think(400);
+    const t = userText.toLowerCase();
+
+    // Detectar servicios principales
+    if (t.includes("landing")) {
+      setTyping(false);
+      addUser(userText);
+      addAssistant("Perfecto, una **Landing Page** enfocada en conversión. ¿Quieres cotizar?", [
+        "Cotizar (modo guiado)",
+        "Ver precios",
+        "Volver al inicio",
+      ]);
+      return;
+    }
+
+    if (t.includes("corporativo") || t.includes("corporativa")) {
+      setTyping(false);
+      addUser(userText);
+      addAssistant("Genial, un **Sitio Corporativo** con páginas internas. ¿Cotizamos?", [
+        "Cotizar (modo guiado)",
+        "Ver precios",
+        "Volver al inicio",
+      ]);
+      return;
+    }
+
+    if (t.includes("tienda") || t.includes("ecommerce")) {
+      setTyping(false);
+      addUser(userText);
+      addAssistant("Excelente, una **Tienda Online** con pagos. ¿Arrancamos cotización?", [
+        "Cotizar (modo guiado)",
+        "Ver precios",
+        "Volver al inicio",
+      ]);
+      return;
+    }
+
+    if (t.includes("app") || t.includes("aplicación") || t.includes("aplicacion")) {
+      setTyping(false);
+      addUser(userText);
+      addAssistant("Vamos con una **Aplicación Web** a medida. ¿Cotizamos?", [
+        "Cotizar (modo guiado)",
+        "Ver precios",
+        "Volver al inicio",
+      ]);
+      return;
+    }
+
+    if (t.includes("cotiz")) {
+      setTyping(false);
+      addUser(userText);
+      startWizard();
+      return;
+    }
+
+    if (t.includes("soporte")) {
+      setTyping(false);
+      addUser(userText);
+      addAssistant("Claro, soporte técnico ⚙️. Cuéntame el problema o abre WhatsApp.", [
+        "Abrir WhatsApp",
+        "Volver al inicio",
+      ]);
+      return;
+    }
+
+    if (t.includes("precio")) {
+      setTyping(false);
+      addUser(userText);
+      addAssistant(
+        [
+          "Guía referencial:",
+          "• Landing: desde $300.000",
+          "• Corporativa: desde $700.000",
+          "• Tienda: desde $1.200.000",
+          "• App/Medida: a evaluar",
+        ].join("\n"),
+        ["Cotizar (modo guiado)", "Volver al inicio"]
+      );
+      return;
+    }
+
+    if (t.includes("volver") || t.includes("inicio")) {
+      setTyping(false);
+      addUser(userText);
+      addAssistant("¿Qué necesitas ahora?", SERVICE_CHIPS);
+      return;
+    }
+
+    if (t.includes("whatsapp")) {
+      setTyping(false);
+      addUser(userText);
+      const waLink = wizardLast ? buildWhatsAppLink(wizardLast) : buildWhatsAppLink(null);
+      window.open(waLink, "_blank");
+      showToast("¡WhatsApp abierto! 🚀", "success");
+      return;
+    }
+
+    setTyping(false);
+    addUser(userText);
+    addAssistant("Puedo ayudarte con estos servicios:", SERVICE_CHIPS);
+    addAssistant("O también:", ["Cotizar (modo guiado)", "Soporte técnico", "Ver precios"]);
+  }
+
+  function send(textRaw?: string) {
+    const text = (textRaw ?? input).trim();
+    if (!text) return;
+    setInput("");
+    replyTo(text);
+  }
+
+  function buildWhatsAppLink(data: WizardData | null) {
+    const text = data ? buildWizardMessage(data) : buildChatSummary(messages);
+    return `https://wa.me/${WA_PHONE}?text=${encodeURIComponent(text)}`;
+  }
+
+  async function sendWhatsAppAndEmail() {
+    if (isSending) return;
+    const link = buildWhatsAppLink(wizardLast);
+
+    // Detectar si es móvil
+    const ua = navigator.userAgent || "";
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+
+    if (isMobile) {
+      // En móvil: navegar en misma pestaña (evita pestaña vacía)
+      window.location.href = link;
+    } else {
+      // En desktop: SOLO abrir nueva pestaña, NO navegar la actual
+      const newWin = window.open(link, "_blank", "noopener,noreferrer");
+      if (newWin) newWin.opener = null; // Seguridad extra
+    }
+
+    showToast("¡WhatsApp abierto! 🚀", "success");
+  }
+
+  const clearHistory = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(WIZARD_KEY);
+      localStorage.removeItem(WIZARD_LAST_KEY);
+    } catch { }
+
+    setWizard({ active: false, step: 0, data: { tipo: "", negocio: "", presupuesto: "", plazo: "" } });
+    setWizardLast(null);
+    setMessages([]);
+    initHello();
+  };
+
+  return (
+    <main style={{
+      position: "relative",
+      width: "100%",
+      height: "100vh",
+      display: "grid",
+      gridTemplateRows: "auto 1fr auto",
+      overflow: "hidden",
+      background: "#020617",
+      fontFamily: "system-ui, -apple-system, sans-serif"
+    }}>
+      {/* Topbar */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "auto 1fr auto",
+        alignItems: "center",
+        gap: "1rem",
+        padding: "1rem 1.5rem",
+        background: "rgba(6, 12, 24, 0.95)",
+        borderBottom: "1px solid rgba(173, 216, 255, 0.15)",
+        backdropFilter: "blur(12px)",
+        zIndex: 10,
+      }}>
         <button
-          className="vc-fab"
-          onClick={() => setOpen(true)}
-          aria-label="Abrir chat"
-          title="Chat"
-        >
-          <span className="vc-fab-icon"><RobotIcon /></span>
-          {unread > 0 && <span className="vc-badge">{unread >= 9 ? "9+" : unread}</span>}
-        </button>
-      )}
-
-      {/* Overlay */}
-      <div
-        className={`vc-overlay ${open ? "show" : ""}`}
-        onClick={() => setOpen(false)}
-        aria-hidden="true"
-      />
-
-      {/* Dock */}
-      <aside className={`vc-dock ${open ? "open" : ""}`} role="dialog" aria-modal="true" aria-label="Chat Velocity">
-        <header className="vc-head">
-          <div className="vc-brand">
-            <span className="vc-avatar brand"><RobotIcon /></span>
-            <span>Velocity Chat</span>
-          </div>
-          <button className="vc-x" onClick={() => setOpen(false)} aria-label="Cerrar chat">✕</button>
-        </header>
-
-        <div className="vc-body" ref={listRef} role="log" aria-live="polite">
-          {messages.map((m) => (
-            <Bubble
-              key={m.id}
-              role={m.role}
-              text={m.text}
-              chips={m.chips}
-              onChipClick={(c) => {
-                if (c.includes("WhatsApp")) {
-                  openWhatsApp();
-                } else if (c === "Volver al inicio") {
-                  resetChat(true);
-                } else {
-                  send(c);
-                }
-              }}
-            />
-          ))}
-        </div>
-
-        <form
-          className="vc-inputbar"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send();
+          onClick={() => window.history.back()}
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            color: "#fff",
+            padding: "0.5rem 1rem",
+            borderRadius: "8px",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: "0.9rem",
           }}
         >
-          <input
-            className="vc-input"
-            placeholder={wizard.active ? placeholderByStep(wizard.step) : "Escribe tu mensaje..."}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            aria-label="Mensaje"
-          />
-          <button className="vc-send" type="submit">→</button>
-        </form>
-      </aside>
+          ← Volver
+        </button>
 
-      {/* ESTILOS */}
-      <style jsx global>{`
-        .vc-root, .vc-root * {
-          box-sizing: border-box !important;
-          font-family: system-ui, -apple-system, "Inter", sans-serif !important;
-          cursor: default !important; /* Restituye cursor dentro del chat */
-        }
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          color: "#eaf6ff",
+          fontWeight: 900,
+          fontSize: "1.1rem",
+          letterSpacing: "0.3px",
+        }}>
+          <span style={{
+            width: "10px",
+            height: "10px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #22c55e, #16a34a)",
+            boxShadow: "0 0 12px rgba(34, 197, 94, 0.6)",
+          }} />
+          Asistente Velocity
+        </div>
 
-        :root {
-          --neo1: #8b5cf6;
-          --neo2: #06b6d4;
-          --glass: rgba(15, 23, 42, 0.95);
-          --bg-primary: #0f172a;
-          --text-primary: #f1f5f9;
-          --text-secondary: #cbd5e1;
-        }
+        <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+          <button
+            onClick={sendWhatsAppAndEmail}
+            disabled={isSending}
+            style={{
+              background: "linear-gradient(135deg, #22c55e, #16a34a)",
+              color: "white",
+              padding: "0.65rem 1.2rem",
+              borderRadius: "999px",
+              fontWeight: 800,
+              border: "1px solid rgba(255, 255, 255, 0.25)",
+              cursor: "pointer",
+              fontSize: "0.9rem",
+            }}
+          >
+            {isSending ? "Enviando…" : "WhatsApp"}
+          </button>
 
-        /* FAB IZQUIERDA, pegado abajo */
-        .vc-fab{
-          position: fixed !important;
-          left: 24px !important;
-          bottom: 24px !important;
-          width: 60px !important;
-          height: 60px !important;
-          border-radius: 50% !important;
-          background: linear-gradient(135deg, var(--neo1), var(--neo2)) !important;
-          border: 2px solid rgba(255, 255, 255, 0.2) !important;
-          box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2) !important;
-          display: grid !important;
-          place-items: center !important;
-          cursor: pointer !important;
-          z-index: 2147483000 !important;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-          margin: 0 !important; padding: 0 !important;
-        }
-        .vc-fab:hover{ transform: translateY(-2px) scale(1.05) !important; }
-        .vc-fab-icon svg{ width: 24px !important; height: 24px !important; filter: brightness(0) invert(1) !important; }
-        .vc-badge{
-          position: absolute !important; top: -4px !important; right: -4px !important;
-          width: 20px !important; height: 20px !important; border-radius: 50% !important;
-          background: linear-gradient(135deg, #ef4444, #dc2626) !important; color: white !important;
-          font-size: 10px !important; font-weight: 900 !important; display: grid !important; place-items: center !important;
-          border: 2px solid var(--bg-primary) !important;
-        }
+          <button
+            onClick={clearHistory}
+            style={{
+              background: "rgba(255, 255, 255, 0.1)",
+              color: "#fff",
+              padding: "0.65rem 1rem",
+              borderRadius: "999px",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: "0.9rem",
+            }}
+          >
+            Borrar
+          </button>
+        </div>
+      </div>
 
-        /* Overlay (click para cerrar) */
-        .vc-overlay{
-          position: fixed !important; inset: 0 !important;
-          backdrop-filter: blur(8px) !important;
-          background: rgba(3, 7, 18, 0.6) !important;
-          opacity: 0 !important; pointer-events: none !important;
-          transition: opacity 0.3s ease !important;
-          z-index: 2147482998 !important;
-          cursor: pointer !important;
-        }
-        .vc-overlay.show{ opacity: 1 !important; pointer-events: auto !important; }
+      {/* Fondo animado */}
+      <NeonGridBackground />
 
-        /* Dock DESKTOP – pegado a la izquierda y abajo (ligeramente) */
-        .vc-dock{
-          position: fixed !important;
-          left: 24px !important;
-          bottom: 24px !important;
-          transform: translateX(-120%) !important; /* completamente oculto */
-          width: min(380px, 85vw) !important;
-          height: min(640px, 85vh) !important;
-          background: var(--glass) !important;
-          backdrop-filter: blur(20px) saturate(180%) !important;
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
-          border-radius: 20px !important;
-          box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25) !important;
-          z-index: 2147482999 !important;
-          display: grid !important;
-          grid-template-rows: auto 1fr auto !important;
-          transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
-          overflow: hidden !important;
-        }
-        .vc-dock.open{ transform: translateX(0) !important; }
+      {/* Lista de mensajes */}
+      <div
+        ref={listRef}
+        style={{
+          position: "relative",
+          zIndex: 5,
+          overflowY: "auto",
+          padding: "1.5rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+        }}
+      >
+        {messages.map((m) => (
+          <Bubble key={m.id} role={m.role} text={m.text} chips={m.chips} onChipClick={send} />
+        ))}
+        {typing && <Typing />}
+      </div>
 
-        .vc-dock::before{
-          content: "" !important; position: absolute !important; inset: 0 !important;
-          background: var(--bg-primary) !important; border-radius: 20px !important; z-index: -1 !important; opacity: 0.9 !important;
-        }
+      {/* Input bar */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+        style={{
+          position: "relative",
+          zIndex: 10,
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          gap: "0.75rem",
+          padding: "1rem 1.5rem",
+          background: "rgba(6, 12, 24, 0.95)",
+          borderTop: "1px solid rgba(173, 216, 255, 0.15)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={wizard.active ? wizardPrompt(wizard.step) : "Escribe aquí…"}
+          style={{
+            height: "48px",
+            borderRadius: "12px",
+            padding: "0 1rem",
+            color: "#eaf6ff",
+            background: "rgba(255, 255, 255, 0.08)",
+            border: "1px solid rgba(173, 216, 255, 0.28)",
+            fontSize: "1rem",
+          }}
+        />
+        <button
+          type="submit"
+          style={{
+            height: "48px",
+            padding: "0 1.5rem",
+            borderRadius: "12px",
+            border: "none",
+            color: "#fff",
+            fontWeight: 800,
+            cursor: "pointer",
+            background: "linear-gradient(135deg, #06b6d4, #a855f7)",
+            fontSize: "1rem",
+          }}
+        >
+          Enviar
+        </button>
+      </form>
 
-        .vc-head{
-          display: flex !important; align-items: center !important; justify-content: space-between !important;
-          padding: 14px 18px !important;
-          background: rgba(30, 41, 59, 0.5) !important;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-          color: var(--text-primary) !important;
-        }
-        .vc-brand{ display: flex !important; align-items: center !important; gap: 10px !important; font-weight: 800 !important; }
-        .vc-avatar{ width: 24px !important; height: 24px !important; border-radius: 50% !important; display: grid !important; place-items: center !important; background: linear-gradient(135deg, var(--neo1), var(--neo2)) !important; }
-        .vc-avatar svg{ width: 14px !important; height: 14px !important; filter: brightness(0) invert(1) !important; }
-        .vc-x{ width: 32px !important; height: 32px !important; border-radius: 8px !important; background: rgba(255, 255, 255, 0.1) !important; color: var(--text-primary) !important; border: none !important; cursor: pointer !important; }
-        .vc-x:hover{ background: rgba(255, 255, 255, 0.15) !important; }
-
-        .vc-body{ padding: 14px !important; overflow-y: auto !important; display: flex !important; flex-direction: column !important; gap: 12px !important; flex: 1 !important; }
-
-        .vc-inputbar{
-          display: flex !important; gap: 10px !important; padding: 12px 14px !important;
-          background: rgba(30, 41, 59, 0.5) !important; border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-        }
-        .vc-input{
-          flex: 1 !important; height: 44px !important; border-radius: 12px !important; padding: 0 14px !important;
-          background: rgba(255, 255, 255, 0.08) !important; border: 1px solid rgba(255, 255, 255, 0.15) !important;
-          color: var(--text-primary) !important; font-size: 0.95rem !important; transition: all 0.2s ease !important;
-        }
-        .vc-input:focus{ outline: none !important; border-color: var(--neo2) !important; background: rgba(255, 255, 255, 0.12) !important; }
-        .vc-input::placeholder{ color: var(--text-secondary) !important; }
-        .vc-send{
-          width: 44px !important; height: 44px !important; border-radius: 12px !important;
-          background: linear-gradient(135deg, var(--neo1), var(--neo2)) !important; border: none !important;
-          color: white !important; font-weight: 800 !important; cursor: pointer !important;
-        }
-
-        /* Burbujas */
-        .vc-bubble{ display: flex !important; flex-direction: column !important; max-width: 85% !important; }
-        .vc-assistant{ align-self: flex-start !important; }
-        .vc-user{ align-self: flex-end !important; }
-        .vc-inner{
-          border-radius: 16px !important; padding: 10px 12px !important; line-height: 1.55 !important;
-          font-size: 0.95rem !important; white-space: pre-wrap !important; word-wrap: break-word !important;
-        }
-        .vc-assistant .vc-inner{ background: rgba(255, 255, 255, 0.97) !important; color: #1e293b !important; border: 1px solid rgba(15, 23, 42, 0.1) !important; }
-        .vc-user .vc-inner{ background: linear-gradient(135deg, var(--neo1), var(--neo2)) !important; color: white !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; }
-
-        /* Chips 2 por fila (desktop) */
-        .vc-chips{ display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-top: 8px !important; }
-        .vc-chip{
-          border: none !important; border-radius: 999px !important; padding: 10px 14px !important;
-          font-size: 0.9rem !important; font-weight: 800 !important; cursor: pointer !important;
-          background: rgba(255, 255, 255, 0.1) !important; color: var(--text-primary) !important;
-          border: 1px solid rgba(255, 255, 255, 0.22) !important; text-align: center !important;
-          backdrop-filter: blur(10px) !important; transition: transform .15s ease, background .2s ease, box-shadow .2s ease !important;
-        }
-        .vc-chip:hover{ transform: translateY(-1px) !important; background: rgba(255, 255, 255, 0.16) !important; box-shadow: 0 8px 20px rgba(6, 182, 212, 0.25) !important; }
-        .vc-chip.whatsapp-chip{
-          background: linear-gradient(135deg, #22c55e, #16a34a) !important; color: #fff !important; border: 1px solid rgba(34, 197, 94, 0.35) !important;
-          grid-column: 1 / -1 !important;
-        }
-
-        /* MÓVIL: bottom-sheet con dvh */
-        @media (max-width: 768px) {
-          .vc-dock{
-            left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important;
-            width: 100vw !important; height: 88dvh !important; max-height: calc(100dvh - 8px) !important;
-            border-radius: 16px 16px 0 0 !important;
-            transform: translateY(100%) !important; /* cerrado: oculto abajo */
-          }
-          .vc-dock.open{ transform: translateY(0) !important; }
-
-          .vc-body{ padding: 12px !important; }
-          .vc-inputbar{ padding: 12px 14px calc(12px + env(safe-area-inset-bottom)) !important; }
-          .vc-chips{ grid-template-columns: 1fr !important; gap: 6px !important; }
-          .vc-chip{ padding: 9px 12px !important; font-size: 0.88rem !important; }
-        }
-
-        /* iOS: evitar auto-zoom del teclado (input >= 16px) */
-        @supports (-webkit-touch-callout: none) {
-          .vc-input { font-size: 16px !important; }
-        }
-
-        /* Teclado abierto (opcional): reduce un poco la altura en móvil */
-        @media (max-width: 768px) {
-          .vc-kb .vc-dock { height: 80dvh !important; }
-        }
-
-        /* Scrollbar suave en el body del chat */
-        .vc-body::-webkit-scrollbar { width: 6px !important; }
-        .vc-body::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.06) !important; border-radius: 3px !important; }
-        .vc-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25) !important; border-radius: 3px !important; }
-        .vc-body::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.35) !important; }
-      `}</style>
-    </div>
+      {/* Toast */}
+      {toast.show && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "20px",
+            right: "20px",
+            background: toast.type === "success" ? "#22c55e" : "#ef4444",
+            color: "white",
+            padding: "1rem 1.5rem",
+            borderRadius: "12px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.3)",
+            fontWeight: 800,
+            zIndex: 9999,
+          }}
+        >
+          {toast.msg}
+        </div>
+      )}
+    </main>
   );
-
-  if (!mounted || !portalEl) return null;
-  return createPortal(UI, portalEl);
 }
 
-/* ===== Subcomponentes ===== */
-function Bubble({
-  role, text, chips, onChipClick,
-}: { role: Role; text: string; chips?: string[]; onChipClick?: (c: string) => void }) {
-  const isAssistant = role === "assistant";
+function Bubble({ role, text, chips, onChipClick }: { role: Role; text: string; chips?: string[]; onChipClick?: (s: string) => void }) {
+  const isUser = role === "user";
   return (
-    <div className={`vc-bubble ${isAssistant ? "vc-assistant" : "vc-user"}`}>
-      <div className="vc-inner" dangerouslySetInnerHTML={{ __html: md(text) }} />
+    <div
+      style={{
+        maxWidth: "85%",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.75rem",
+        alignSelf: isUser ? "flex-end" : "flex-start",
+      }}
+    >
+      <div
+        dangerouslySetInnerHTML={{ __html: mdToHtml(text) }}
+        style={{
+          borderRadius: "14px",
+          padding: "1rem 1.25rem",
+          lineHeight: 1.65,
+          fontSize: "1rem",
+          boxShadow: "0 2px 12px rgba(0, 0, 0, 0.15)",
+          background: isUser ? "rgba(6, 182, 212, 0.2)" : "rgba(255, 255, 255, 0.98)",
+          color: isUser ? "#eaf6ff" : "#0f172a",
+          border: isUser ? "1px solid rgba(6, 182, 212, 0.45)" : "1px solid rgba(15, 23, 42, 0.12)",
+          borderLeft: isUser ? undefined : "3px solid #06b6d4",
+        }}
+      />
       {!!chips?.length && (
-        <div className="vc-chips">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem" }}>
           {chips.map((c) => (
             <button
               key={c}
-              className={`vc-chip ${c.includes("WhatsApp") ? "whatsapp-chip" : ""}`}
               onClick={() => onChipClick?.(c)}
+              style={{
+                border: "1px solid rgba(15, 23, 42, 0.15)",
+                borderRadius: "999px",
+                padding: "0.75rem 1.25rem",
+                fontWeight: 800,
+                fontSize: "0.95rem",
+                cursor: "pointer",
+                color: "#0b1220",
+                background: "linear-gradient(135deg, #ffffff, #f1f5f9)",
+                boxShadow: "0 4px 14px rgba(6, 182, 212, 0.2)",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 6px 20px rgba(6, 182, 212, 0.35)";
+                e.currentTarget.style.background = "linear-gradient(135deg, #22d3ee, #06b6d4)";
+                e.currentTarget.style.color = "#001219";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 4px 14px rgba(6, 182, 212, 0.2)";
+                e.currentTarget.style.background = "linear-gradient(135deg, #ffffff, #f1f5f9)";
+                e.currentTarget.style.color = "#0b1220";
+              }}
             >
               {c}
             </button>
@@ -564,46 +636,133 @@ function Bubble({
   );
 }
 
-function RobotIcon() {
+function Typing() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="3" y="7" width="18" height="12" rx="3" stroke="currentColor" strokeWidth="2" fill="rgba(255,255,255,.1)" />
-      <circle cx="9" cy="13" r="2" fill="currentColor" />
-      <circle cx="15" cy="13" r="2" fill="currentColor" />
-      <rect x="10.5" y="3" width="3" height="4" rx="1" fill="currentColor" />
-    </svg>
+    <div style={{
+      display: "flex",
+      gap: "6px",
+      padding: "1rem",
+      background: "rgba(255, 255, 255, 0.95)",
+      borderRadius: "14px",
+      width: "fit-content",
+    }}>
+      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#06b6d4", animation: "bounce 1.4s infinite ease-in-out both", animationDelay: "-0.32s" }} />
+      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#06b6d4", animation: "bounce 1.4s infinite ease-in-out both", animationDelay: "-0.16s" }} />
+      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#06b6d4", animation: "bounce 1.4s infinite ease-in-out both" }} />
+      <style>{`
+        @keyframes bounce {
+          0%, 80%, 100% { transform: scale(0); }
+          40% { transform: scale(1); }
+        }
+      `}</style>
+    </div>
   );
 }
 
-/* ===== Utils ===== */
-function md(s: string) {
+function NeonGridBackground() {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d")!;
+    let raf = 0;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+    const resize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    window.addEventListener("resize", resize, { passive: true });
+
+    const lines = Array.from({ length: 32 }, () => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      v: 0.4 + Math.random() * 0.8,
+      o: 0.08 + Math.random() * 0.15,
+    }));
+
+    const draw = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(2,6,23,0.98)";
+      ctx.fillRect(0, 0, w, h);
+
+      lines.forEach((p) => {
+        ctx.save();
+        ctx.strokeStyle = `rgba(6, 182, 212, ${p.o})`;
+        ctx.shadowColor = "rgba(6,182,212,0.2)";
+        ctx.shadowBlur = 3;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + 100, p.y + 100);
+        ctx.stroke();
+        ctx.restore();
+
+        p.x += p.v * 0.9;
+        p.y += p.v * 1;
+        if (p.x > w + 80) p.x = -80;
+        if (p.y > h + 80) p.y = -80;
+      });
+
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={ref}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 0,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+function mdToHtml(s: string) {
   return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>");
 }
-function placeholderByStep(step: number) {
-  if (step === 1) return "Elige tipo de proyecto...";
-  if (step === 2) return "Describe tu rubro o negocio...";
-  if (step === 3) return "Selecciona presupuesto...";
-  if (step === 4) return "Indica plazo estimado...";
-  return "Escribe tu mensaje...";
+
+function wizardPrompt(step: number) {
+  if (step === 1) return "Ej: Landing / Corporativa / Tienda / App";
+  if (step === 2) return "Ej: Restaurante, tienda…";
+  if (step === 3) return "Ej: $500.000 / A definir";
+  if (step === 4) return "Ej: 2 semanas / A definir";
+  return "Escribe aquí…";
 }
-function buildWizardSummary(d: WizardData) {
-  return [
-    `• Tipo: **${d.tipo || "—"}**`,
-    `• Rubro/Negocio: **${d.negocio || "—"}**`,
-    `• Presupuesto: **${d.presupuesto || "—"}**`,
-    `• Plazo: **${d.plazo || "—"}**`,
-  ].join("\n");
+
+function buildChatSummary(msgs: Msg[]) {
+  const lines: string[] = ["Hola, vengo desde el chat:"];
+  msgs.forEach((m) => {
+    const plain = m.text.replace(/<[^>]+>/g, "");
+    lines.push(`${m.role === "user" ? "Yo" : "Bot"}: ${plain}`);
+  });
+  let text = lines.join("\n");
+  if (text.length > 900) text = text.slice(0, 900) + "…";
+  return text;
 }
-function buildWizardMessageOrSummary(d: WizardData, msgs: Msg[]) {
-  const hasWizard = d.tipo || d.negocio || d.presupuesto || d.plazo;
-  if (!hasWizard && msgs.length) {
-    const MAX = 900;
-    const lines = ["Hola, vengo desde el chat de Velocity. Resumen:"];
-    msgs.forEach((m) => lines.push(`${m.role === "user" ? "Yo" : "Asistente"}: ${m.text}`));
-    let txt = lines.join("\n");
-    if (txt.length > MAX) txt = txt.slice(0, MAX) + "…";
-    return txt;
-  }
+
+function buildWizardMessage(d: WizardData) {
   return (
     "Hola, quiero cotizar un proyecto:\n" +
     `• Tipo: ${d.tipo || "—"}\n` +
@@ -611,4 +770,13 @@ function buildWizardMessageOrSummary(d: WizardData, msgs: Msg[]) {
     `• Presupuesto: ${d.presupuesto || "—"}\n` +
     `• Plazo: ${d.plazo || "—"}`
   );
+}
+
+function buildWizardSummary(d: WizardData) {
+  return [
+    `• Tipo: **${d.tipo || "—"}**`,
+    `• Rubro/Negocio: **${d.negocio || "—"}**`,
+    `• Presupuesto: **${d.presupuesto || "—"}**`,
+    `• Plazo: **${d.plazo || "—"}**`,
+  ].join("\n");
 }
