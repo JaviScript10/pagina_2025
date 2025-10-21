@@ -1356,3 +1356,17 @@ section[id] {
 :root {
   /* ya tienes viewport-fit=cover en <head>? si no, agrega la meta en layout.tsx */
 }
+
+/* En tu globals.css */
+@supports (-webkit-touch-callout: none) {
+  #vc-root .vc-input {
+    font-size: 16px !important;
+  }
+}
+
+/* ⬇ AGREGA ESTO para Android también */
+@media (max-width: 768px) {
+  .vc-input {
+    font-size: 16px !important; /* Evita auto-zoom en Android */
+  }
+}

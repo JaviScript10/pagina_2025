@@ -73,15 +73,30 @@ export default function ChatDock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
-  /* Lock scroll al abrir y reset de badge */
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = open ? "hidden" : prev || "";
-    if (open) setUnread(0);
-    return () => {
-      document.body.style.overflow = prev || "";
-    };
-  }, [open]);
+/* Lock scroll al abrir y reset de badge */
+useEffect(() => {
+  if (!open) return;
+  
+  const prev = document.body.style.overflow;
+  const prevPosition = document.body.style.position;
+  const prevWidth = document.body.style.width;
+  const prevHeight = document.body.style.height;
+  
+  // Bloqueo más agresivo para Android
+  document.body.style.overflow = 'hidden';
+  document.body.style.position = 'fixed';
+  document.body.style.width = '100%';
+  document.body.style.height = '100%';
+  
+  setUnread(0);
+  
+  return () => {
+    document.body.style.overflow = prev || '';
+    document.body.style.position = prevPosition || '';
+    document.body.style.width = prevWidth || '';
+    document.body.style.height = prevHeight || '';
+  };
+}, [open]);
 
   // Autoscroll
   useEffect(() => {
@@ -488,6 +503,8 @@ export default function ChatDock() {
           transform: translateX(-110%) !important; /* 100% escondido */
           width: min(380px, 90vw) !important;
           height: min(640px, 88vh) !important;
+          height: min(640px, 86svh) !important;   /* Small Viewport Height - Android estable */
+          height: min(640px, 86dvh) !important;
           background: var(--glass) !important;
           backdrop-filter: blur(18px) saturate(180%) !important;
           border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -682,44 +699,38 @@ export default function ChatDock() {
           box-shadow: 0 10px 26px rgba(34, 197, 94, 0.3) !important;
         }
 
-/* Móvil: centrar sin translateX y altura estable */
+/* Móvil: centrar y deslizar desde abajo */
 @media (max-width: 768px) {
   .vc-dock {
     left: 0 !important;
     right: 0 !important;
-    bottom: max(0px, env(safe-area-inset-bottom)) !important;
+    bottom: 0 !important;
     margin: 0 auto !important;
-
-    /* Sin translateX: solo deslizamiento vertical */
+    
+    /* Deslizamiento vertical en lugar de horizontal */
     transform: translateY(100%) !important;
-
-    /* Ancho y radio superiores */
+    
     width: 100vw !important;
-    max-width: 640px !important; /* opcional: limita en tablets chicas */
     border-radius: 16px 16px 0 0 !important;
-
-    /* Altura: fallback (vh) + nuevas unidades móviles */
-    height: 88vh !important;    /* fallback */
-    height: 86svh !important;   /* Android estable */
-    height: 86dvh !important;   /* navegadores nuevos */
+    
+    /* Altura estable en Android */
+    height: 88vh !important;
+    height: 86svh !important;
+    height: 86dvh !important;
   }
+  
   .vc-dock.open {
     transform: translateY(0) !important;
   }
-
-  .vc-chips,
-  .vc-chips-standalone {
-    grid-template-columns: 1fr !important;
-  }
-
-  .vc-toast {
-    left: 50% !important;
-    bottom: calc(20px + env(safe-area-inset-bottom)) !important;
-    transform: translateX(-50%) !important;
-  }
-
+  
+  /* Input debe respetar área segura */
   .vc-inputbar {
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+  
+  /* Evitar zoom en inputs */
+  .vc-input {
+    font-size: 16px !important;
   }
 }
 
