@@ -36,8 +36,11 @@ export default function Header() {
   const MenuLinks = () => (
     <>
       <a className="chip" href="#services" onClick={handleAnchor}>Servicios</a>
-      <a className="chip" href="#benefits" onClick={handleAnchor}>Beneficios</a>
+      <a className="chip" href="#about" onClick={handleAnchor}>Quiénes somos</a>
       <a className="chip" href="#gallery" onClick={handleAnchor}>Galería</a>
+      <a className="chip" href="#benefits" onClick={handleAnchor}>Beneficios</a>
+      {/* 👇 Nuevo: Quiénes somos */}
+
       <a className="chip" href="#testimonials" onClick={handleAnchor}>Clientes</a>
       <a className="chip" href="#faq" onClick={handleAnchor}>FAQ</a>
       <a className="chip cta" href="#cotizar" onClick={handleAnchor}>Cotizar Ahora →</a>
@@ -218,7 +221,7 @@ export default function Header() {
         .hamb.is-open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
         .hamb.is-open span:nth-child(2) { opacity: 0; }
         .hamb.is-open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-        /* 🔥 OCULTAR hamburguesa cuando el drawer está abierto para evitar “dos equis” */
+        /* Evitar “dos equis” (hamb oculta al abrir) */
         .hamb.is-open { opacity: 0; pointer-events: none; }
 
         /* Energy line */
