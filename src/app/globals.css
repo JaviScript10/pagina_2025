@@ -1,19 +1,31 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-@import 'tailwindcss';
+﻿@import 'tailwindcss';
 
 /* ==== Arreglo anti-scroll lateral / Android ==== */
-:root, html, body {
+:root,
+html,
+body {
   width: 100%;
   max-width: 100%;
-  overflow-x: clip;               /* mejor que hidden en Chrome/Android */
+  overflow-x: clip;
+  /* mejor que hidden en Chrome/Android */
 }
 
 @supports not (overflow: clip) {
-  :root, html, body { overflow-x: hidden; }
+
+  :root,
+  html,
+  body {
+    overflow-x: hidden;
+  }
 }
 
 /* Los medios nunca deben “ensanchar” el viewport */
-img, canvas, video, iframe { max-width: 100%; }
+img,
+canvas,
+video,
+iframe {
+  max-width: 100%;
+}
 
 
 
@@ -1346,11 +1358,17 @@ section[id] {
 #vc-root {
   position: fixed !important;
   inset: 0 !important;
-  pointer-events: none !important;           /* el contenedor no bloquea clics */
+  pointer-events: none !important;
+  /* el contenedor no bloquea clics */
   z-index: 2147482997 !important;
 }
-.vc-fab, .vc-overlay, .vc-dock, .vc-toast {
-  pointer-events: auto !important;           /* los elementos interactivos sí */
+
+.vc-fab,
+.vc-overlay,
+.vc-dock,
+.vc-toast {
+  pointer-events: auto !important;
+  /* los elementos interactivos sí */
 }
 
 /* Botón flotante de WhatsApp: siempre visible y dentro del viewport */
@@ -1406,7 +1424,11 @@ section[id] {
 
 /* === Ajustes móviles === */
 @media (max-width: 768px) {
-  .vc-input { font-size: 16px !important; } /* evita zoom en Android/iPhone */
+  .vc-input {
+    font-size: 16px !important;
+  }
+
+  /* evita zoom en Android/iPhone */
 }
 
 /* === Viewport seguro para Android/iOS === */
@@ -1417,5 +1439,7 @@ body {
 
 /* === Desactiva cursor en móviles === */
 @media (max-width: 920px) {
-  #cursor { display: none !important; }
+  #cursor {
+    display: none !important;
+  }
 }
