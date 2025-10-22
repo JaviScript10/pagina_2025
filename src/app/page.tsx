@@ -5,14 +5,14 @@ import FadeIn from "./components/FadeIn";
 import Hero from "./components/Hero";
 import Services from "./components/Services";
 import Benefits from "./components/Benefits";
-import Projects from "./components/Projects"; // ✅ reemplaza Gallery por Projects
+import Projects from "./components/Projects";
 import Testimonials from "./components/Testimonials";
 import FAQ from "./components/FAQ";
 import WhatsAppForm from "./components/WhatsAppForm";
 import Footer from "./components/Footer";
 import WhatsAppButton from "./components/WhatsAppButton";
 
-// Import dinámico del About (agarra el default sí o sí)
+// Import dinámico del About
 const AboutSection = dynamic(
   () => import("./components/AboutSection").then((m) => m.default || m),
   { ssr: true }
@@ -21,10 +21,8 @@ const AboutSection = dynamic(
 export default function Home() {
   return (
     <>
-      {/* Hero arriba (el Header va en _app/layout o donde lo tengas) */}
-      <FadeIn delay={0.00}>
-        <Hero />
-      </FadeIn>
+      {/* 👉 Hero sin FadeIn para mejorar LCP */}
+      <Hero />
 
       {/* 1) Servicios */}
       <FadeIn delay={0.05}>
