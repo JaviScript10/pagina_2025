@@ -13,6 +13,38 @@ export default function Header() {
     };
   }, [open]);
 
+  // Auto-hide header (todas las resoluciones)
+  useEffect(() => {
+    let last = 0;
+    let ticking = false;
+
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          if (y <= 0) {
+            document.body.classList.remove("scrolling-down", "scrolling-up");
+          } else {
+            if (y > last + 4) {
+              document.body.classList.add("scrolling-down");
+              document.body.classList.remove("scrolling-up");
+            } else if (y < last - 4) {
+              document.body.classList.add("scrolling-up");
+              document.body.classList.remove("scrolling-down");
+            }
+          }
+          last = y;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const scrollToTop = (e) => {
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -37,7 +69,6 @@ export default function Header() {
     <>
       <a className="chip" href="#services" onClick={handleAnchor}>Servicios</a>
       <a className="chip" href="#about" onClick={handleAnchor}>Quiénes somos</a>
-      {/* Proyectos ahora va a #projects */}
       <a className="chip" href="#projects" onClick={handleAnchor}>Proyectos</a>
       <a className="chip" href="#benefits" onClick={handleAnchor}>Beneficios</a>
       <a className="chip" href="#testimonials" onClick={handleAnchor}>Clientes</a>
@@ -47,81 +78,94 @@ export default function Header() {
   );
 
   return (
-    <header className="hdr" role="banner">
-      <div className="row">
-        {/* Brand en caja fija */}
-        <a href="#top" aria-label="Inicio Velocity Web" onClick={scrollToTop} className="brand">
-          <span className="brand-box">
+    <>
+      <header className="hdr" role="banner">
+        <div className="row">
+          {/* Brand en caja fija */}
+          <a href="#top" aria-label="Inicio Velocity Web" onClick={scrollToTop} className="brand">
+            <span className="brand-box">
+              <Image
+                src="/brand/velocityweb-logo.png"
+                alt="Velocity Web"
+                fill
+                sizes="(max-width: 920px) 140px, 190px"
+                priority
+                className="brand-img"
+              />
+            </span>
+          </a>
+
+          {/* Desktop nav */}
+          <nav className="nav" aria-label="Primary">
+            <MenuLinks />
+          </nav>
+
+          {/* Mobile hamburger */}
+          <button
+            className={`hamb ${open ? "is-open" : ""}`}
+            aria-label={open ? "Cerrar menú" : "Abrir menú"}
+            aria-expanded={open}
+            aria-controls="mobile-drawer"
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+        </div>
+
+        {/* Línea de energía */}
+        <div className="energy" aria-hidden="true" />
+
+        {/* Overlay + Drawer */}
+        <div className={`overlay ${open ? "show" : ""}`} onClick={() => setOpen(false)} />
+
+        <aside
+          id="mobile-drawer"
+          className={`drawer ${open ? "open" : ""}`}
+          aria-label="Menú móvil"
+        >
+          <div className="drawer-head">
             <Image
               src="/brand/velocityweb-logo.png"
               alt="Velocity Web"
-              fill
-              sizes="(max-width: 920px) 140px, 190px"
-              priority
-              className="brand-img"
+              width={160}
+              height={44}
+              className="drawer-brand"
             />
-          </span>
-        </a>
+            {/* ÚNICO botón de cerrar visible */}
+            <button className="close" aria-label="Cerrar menú" onClick={() => setOpen(false)}>
+              ✕
+            </button>
+          </div>
+          <nav className="drawer-nav" aria-label="Primary mobile">
+            <MenuLinks />
+          </nav>
+        </aside>
+      </header>
 
-        {/* Desktop nav */}
-        <nav className="nav" aria-label="Primary">
-          <MenuLinks />
-        </nav>
+      {/* Spacer para que el contenido no quede oculto bajo el header fijo */}
+      <div className="hdr-spacer" aria-hidden="true" />
 
-        {/* Mobile hamburger */}
-        <button
-          className={`hamb ${open ? "is-open" : ""}`}
-          aria-label={open ? "Cerrar menú" : "Abrir menú"}
-          aria-expanded={open}
-          aria-controls="mobile-drawer"
-          onClick={() => setOpen((v) => !v)}
-        >
-          <span />
-          <span />
-          <span />
-        </button>
-      </div>
-
-      {/* Línea de energía */}
-      <div className="energy" aria-hidden="true" />
-
-      {/* Overlay + Drawer */}
-      <div className={`overlay ${open ? "show" : ""}`} onClick={() => setOpen(false)} />
-
-      <aside
-        id="mobile-drawer"
-        className={`drawer ${open ? "open" : ""}`}
-        aria-label="Menú móvil"
-      >
-        <div className="drawer-head">
-          <Image
-            src="/brand/velocityweb-logo.png"
-            alt="Velocity Web"
-            width={160}
-            height={44}
-            className="drawer-brand"
-          />
-          {/* ÚNICO botón de cerrar visible */}
-          <button className="close" aria-label="Cerrar menú" onClick={() => setOpen(false)}>
-            ✕
-          </button>
-        </div>
-        <nav className="drawer-nav" aria-label="Primary mobile">
-          <MenuLinks />
-        </nav>
-      </aside>
-
-      {/* === ESTILOS === */}
+      {/* ===== ESTILOS (un solo bloque) ===== */}
       <style jsx>{`
-        /* Header slim y consistente */
+        /* Header fijo y auto-hide por scroll (desktop + móvil) */
         .hdr {
-          position: sticky;
+          position: fixed;
           top: 0;
+          left: 0;
+          right: 0;
           z-index: 9999;
           background: rgba(11, 14, 20, 0.85);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid rgba(34, 211, 238, 0.18);
+          transform: translateY(0);
+          transition: transform .35s ease, background .25s ease;
         }
+        /* Estados por scroll */
+        :global(body.scrolling-down) .hdr { transform: translateY(-100%); }
+        :global(body.scrolling-up) .hdr { transform: translateY(0); }
+
         .row {
           max-width: 1240px;
           margin: 0 auto;
@@ -135,12 +179,7 @@ export default function Header() {
 
         /* Brand */
         .brand { display: inline-flex; align-items: center; text-decoration: none; }
-        .brand-box {
-          position: relative;
-          display: inline-block;
-          height: 52px;
-          width: 195px;
-        }
+        .brand-box { position: relative; display: inline-block; height: 52px; width: 195px; }
         .brand-img {
           object-fit: contain;
           object-position: left center;
@@ -233,16 +272,31 @@ export default function Header() {
         @keyframes energyFlow { 0% { background-position: -220px 0; } 100% { background-position: 220px 0; } }
 
         /* Overlay + Drawer */
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity .3s ease; z-index: 9998; }
+        .overlay {
+          position: fixed; inset: 0; background: rgba(0,0,0,.6);
+          backdrop-filter: blur(6px); opacity: 0; pointer-events: none;
+          transition: opacity .3s ease; z-index: 9998;
+        }
         .overlay.show { opacity: 1; pointer-events: auto; }
         .drawer {
-          position: fixed; top: 0; right: 0; width: 85vw; max-width: 340px; height: 100vh; height: 100dvh;
-          background: rgba(12,16,24,.98); border-left: 1px solid rgba(34,211,238,.28); box-shadow: -12px 0 60px rgba(0,0,0,.75);
-          transform: translateX(100%); transition: transform .35s cubic-bezier(0.4, 0, 0.2, 1); z-index: 9999; display: flex; flex-direction: column; overflow-y: auto;
+          position: fixed; top: 0; right: 0; width: 85vw; max-width: 340px;
+          height: 100vh; height: 100dvh;
+          background: rgba(12,16,24,.98); border-left: 1px solid rgba(34,211,238,.28);
+          box-shadow: -12px 0 60px rgba(0,0,0,.75);
+          transform: translateX(100%);
+          transition: transform .35s cubic-bezier(0.4, 0, 0.2, 1);
+          z-index: 9999; display: flex; flex-direction: column; overflow-y: auto;
         }
         .drawer.open { transform: translateX(0%); }
-        .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 18px; border-bottom: 1px solid rgba(255,255,255,.1); background: rgba(2,6,23,.88); }
-        .drawer-brand { filter: brightness(1.32) saturate(1.12) drop-shadow(0 0 12px rgba(34,211,238,.48)); mix-blend-mode: screen; }
+        .drawer-head {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 18px; border-bottom: 1px solid rgba(255,255,255,.1);
+          background: rgba(2,6,23,.88);
+        }
+        .drawer-brand {
+          filter: brightness(1.32) saturate(1.12) drop-shadow(0 0 12px rgba(34,211,238,.48));
+          mix-blend-mode: screen;
+        }
         .close {
           border: none; background: rgba(255,255,255,.14); color: #fff; font-size: 1.35rem; border-radius: 10px;
           width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; line-height: 1;
@@ -250,11 +304,22 @@ export default function Header() {
         }
         .close:hover { background: rgba(255,255,255,.24); transform: rotate(90deg); }
         .drawer-nav { display: flex; flex-direction: column; gap: 10px; padding: 18px; }
-        .drawer-nav .chip { text-align: center; width: 100%; padding: 14px 18px; font-size: 1.08rem; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); }
+        .drawer-nav .chip {
+          text-align: center; width: 100%; padding: 14px 18px; font-size: 1.08rem;
+          background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+        }
         .drawer-nav .chip:hover { background: rgba(34,211,238,.16); border-color: rgba(34,211,238,.48); transform: translateX(-4px); }
 
-        /* Breakpoints */
-        @media (max-width: 1120px) { .nav { gap: .65rem; } .chip { font-size: 1.02rem; padding: 0.62rem 1.05rem; } }
+        /* Spacer (evita tapar contenido con header fijo) */
+        .hdr-spacer { height: 66px; }
+        @media (max-width: 920px) { .hdr-spacer { height: 60px; } }
+        @media (max-width: 480px) { .hdr-spacer { height: 56px; } }
+
+        /* Breakpoints visuales */
+        @media (max-width: 1120px) {
+          .nav { gap: .65rem; }
+          .chip { font-size: 1.02rem; padding: 0.62rem 1.05rem; }
+        }
         @media (max-width: 920px) {
           .nav { display: none; }
           .hamb { display: inline-block; }
@@ -267,6 +332,6 @@ export default function Header() {
           .drawer { width: 90vw; max-width: 300px; }
         }
       `}</style>
-    </header>
+    </>
   );
 }
