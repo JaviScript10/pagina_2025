@@ -1,5 +1,4 @@
-﻿// src/app/layout.tsx
-import type { Metadata, Viewport } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Header from "./components/Header";
 import ChatDock from "./components/ChatDock";
@@ -64,8 +63,13 @@ export default function RootLayout({
     <html lang="es">
       <head>
         <link rel="icon" href="/favicon.ico" />
-        {/* Preload del logo visible para optimizar LCP */}
+        {/* ⚡ Preload imágenes críticas (LCP) */}
         <link rel="preload" as="image" href="/brand/velocityweb-logo.png" />
+        <link rel="preload" as="image" href="/brand/rayo.png" fetchPriority="high" />
+        
+        {/* ⚡ Preconnect a dominios externos */}
+        <link rel="preconnect" href="https://images.unsplash.com" />
+        <link rel="dns-prefetch" href="https://images.unsplash.com" />
       </head>
 
       <body id="top" className={`${inter.className} antialiased`}>

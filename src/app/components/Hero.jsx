@@ -7,11 +7,11 @@ export default function Hero() {
   const rafId = useRef(0);
   const runningRef = useRef(false);
   const mouse = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
+  const lastFrame = useRef(0);
 
   const [isCoarse, setIsCoarse] = useState(false);
   const [reduced, setReduced] = useState(false);
 
-  // ====== ANIMACIÓN CANVAS ===================================================
   useEffect(() => {
     const mqCoarse = window.matchMedia?.("(pointer: coarse)");
     const mqReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -21,20 +21,23 @@ export default function Hero() {
 
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     if (mqReduced?.matches) return;
 
-    const ctx = canvas.getContext("2d", { alpha: true });
+    const ctx = canvas.getContext("2d", { 
+      alpha: true,
+      desynchronized: true,
+      willReadFrequently: false
+    });
     if (!ctx) return;
 
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cores = navigator.hardwareConcurrency || 4;
     const mem = navigator.deviceMemory || 4;
-    const lowEnd = cores <= 4 || mem <= 4 || dpr >= 3;
+    const lowEnd = cores <= 4 || mem <= 4 || dpr >= 2;
     const isMobileViewport = window.matchMedia("(max-width: 900px)").matches;
 
-    const BLOBS = lowEnd || isMobileViewport ? 4 : 6;
-    const PARTS = lowEnd || isMobileViewport ? 56 : 90;
+    const BLOBS = lowEnd || isMobileViewport ? 3 : 5;
+    const PARTS = lowEnd || isMobileViewport ? 30 : 60;
 
     const resize = () => {
       const w = canvas.parentElement?.clientWidth || window.innerWidth;
@@ -48,7 +51,11 @@ export default function Hero() {
     };
     resize();
 
-    const onResize = () => resize();
+    let resizeTimer;
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(resize, 150);
+    };
     window.addEventListener("resize", onResize, { passive: true });
 
     const blobs = Array.from({ length: BLOBS }, () => ({
@@ -84,20 +91,24 @@ export default function Hero() {
 
     const onVis = () => {
       runningRef.current = document.visibilityState === "visible";
-      if (runningRef.current) loop(performance.now());
+      if (runningRef.current) {
+        lastFrame.current = performance.now();
+        loop(lastFrame.current);
+      }
     };
     document.addEventListener("visibilitychange", onVis);
 
-    const FRAME_MS = 1000 / 30;
-    let last = 0;
+    const FRAME_MS = isMobileViewport ? 1000 / 24 : 1000 / 30;
 
     const loop = (t) => {
       if (!runningRef.current) return;
-      if (t - last < FRAME_MS) {
+      
+      const elapsed = t - lastFrame.current;
+      if (elapsed < FRAME_MS) {
         rafId.current = requestAnimationFrame(loop);
         return;
       }
-      last = t;
+      lastFrame.current = t - (elapsed % FRAME_MS);
 
       const w = canvas.width / dpr;
       const h = canvas.height / dpr;
@@ -106,47 +117,46 @@ export default function Hero() {
         return;
       }
 
-      ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = "rgba(2,6,23,0.85)";
       ctx.fillRect(0, 0, w, h);
 
       ctx.globalCompositeOperation = "lighter";
+      
       for (let i = 0; i < blobs.length; i++) {
         const b = blobs[i];
         b.phase += b.speed;
         b.x += Math.cos(b.phase + i) * b.ax + mouse.current.vx * 0.02;
         b.y += Math.sin(b.phase + i) * b.ay + mouse.current.vy * 0.02;
+        
         if (b.x < -b.r) b.x = w + b.r;
         if (b.x > w + b.r) b.x = -b.r;
         if (b.y < -b.r) b.y = h + b.r;
         if (b.y > h + b.r) b.y = -b.r;
 
         const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
-        const c1 = `hsla(${b.hue},85%,65%,${b.alpha})`;
-        const c2 = `hsla(${(b.hue + 40) % 360},90%,55%,${b.alpha * 0.7})`;
-        g.addColorStop(0, c1);
-        g.addColorStop(1, c2);
+        g.addColorStop(0, `hsla(${b.hue},85%,65%,${b.alpha})`);
+        g.addColorStop(1, `hsla(${(b.hue + 40) % 360},90%,55%,${b.alpha * 0.7})`);
 
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fill();
       }
+      
       ctx.globalCompositeOperation = "source-over";
 
       const repelBase = mqCoarse?.matches ? 0 : 0.006;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = "rgba(56,189,248,0.4)";
+      
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i];
-        ctx.save();
         ctx.strokeStyle = `rgba(163,230,255,${p.o})`;
-        ctx.shadowColor = "rgba(56,189,248,0.6)";
-        ctx.shadowBlur = 6;
         ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(p.x + p.len, p.y + p.len);
         ctx.stroke();
-        ctx.restore();
 
         const dx = p.x - mouse.current.x;
         const dy = p.y - mouse.current.y;
@@ -166,41 +176,16 @@ export default function Hero() {
     };
 
     runningRef.current = true;
+    lastFrame.current = performance.now();
     rafId.current = requestAnimationFrame(loop);
 
     return () => {
       runningRef.current = false;
       cancelAnimationFrame(rafId.current);
+      clearTimeout(resizeTimer);
       window.removeEventListener("resize", onResize);
       if (!mqCoarse?.matches) window.removeEventListener("mousemove", onMove);
       document.removeEventListener("visibilitychange", onVis);
-    };
-  }, []);
-
-  // ====== PARALLAX DEL RAYO (solo desktop) ==================================
-  const rayRef = useRef(null);
-  useEffect(() => {
-    const coarse = window.matchMedia?.("(pointer: coarse)")?.matches;
-    if (coarse) return;
-    const el = rayRef.current;
-    if (!el) return;
-
-    const onMouse = (e) => {
-      const rect = el.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dx = (e.clientX - cx) / rect.width;
-      const dy = (e.clientY - cy) / rect.height;
-      el.style.transform = `translateY(-6px) rotate(4deg) translate(${dx * 10}px, ${dy * 10}px)`;
-    };
-    const onLeave = () => {
-      el.style.transform = "translateY(-6px) rotate(4deg) translate(0, 0)";
-    };
-    window.addEventListener("mousemove", onMouse);
-    window.addEventListener("mouseleave", onLeave);
-    return () => {
-      window.removeEventListener("mousemove", onMouse);
-      window.removeEventListener("mouseleave", onLeave);
     };
   }, []);
 
@@ -209,16 +194,18 @@ export default function Hero() {
       <canvas ref={canvasRef} className="hero-bg" aria-hidden="true" />
 
       <div className="hero-wrap">
-        {/* RAYO ARRIBA DEL TÍTULO */}
-        <div className="ray-top" aria-hidden="true" ref={rayRef}>
+        <div className="ray-top" aria-hidden="true">
           <div className="ray-glow" />
           <Image
             src="/brand/rayo.png"
             alt=""
-            fill
+            width={260}
+            height={220}
             sizes="(max-width: 520px) 130px, (max-width: 900px) 180px, 260px"
             className="ray-img"
             priority
+            quality={85}
+            style={{ width: '100%', height: 'auto' }}
           />
         </div>
 
@@ -235,7 +222,7 @@ export default function Hero() {
         <div className="cta-row">
           <a href="#cotizar" className="btn holo">
             <span className="btn-icon">
-              <Image src="/brand/rayo.png" alt="" width={22} height={22} priority />
+              <Image src="/brand/rayo.png" alt="" width={22} height={22} priority quality={85} />
             </span>
             Cotizar Proyecto
           </a>
@@ -274,7 +261,11 @@ export default function Hero() {
           filter: drop-shadow(0 16px 36px rgba(56,189,248,0.28));
           pointer-events: none;
         }
-        .ray-img { object-fit: contain; }
+        .ray-img { 
+          width: 100% !important;
+          height: auto !important;
+          position: relative !important;
+        }
         .ray-glow {
           position: absolute; inset: -18%; border-radius: 50%;
           background: radial-gradient(closest-side, rgba(163,230,255,0.35), rgba(163,230,255,0) 70%);
@@ -308,8 +299,8 @@ export default function Hero() {
           display: inline-flex; align-items: center; justify-content: center; gap: .6rem;
           text-decoration: none; font-weight: 900; letter-spacing: 0.2px;
           padding: 0.95rem 1.6rem; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.2);
-          color: #03141a; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
-          cursor: pointer; user-select: none; will-change: transform, box-shadow;
+          color: #03141a; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+          cursor: pointer; user-select: none;
         }
         .btn:hover { transform: translateY(-2px); }
         .btn-icon { display: inline-flex; align-items: center; justify-content: center; transform: translateY(-1px); filter: drop-shadow(0 0 8px rgba(56,189,248,0.35)); }
@@ -374,4 +365,3 @@ export default function Hero() {
     </section>
   );
 }
-

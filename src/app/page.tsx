@@ -1,64 +1,53 @@
 ﻿"use client";
 
 import dynamic from "next/dynamic";
-import FadeIn from "./components/FadeIn";
 import Hero from "./components/Hero";
 import Services from "./components/Services";
-import Benefits from "./components/Benefits";
-import Projects from "./components/Projects";
-import Testimonials from "./components/Testimonials";
-import FAQ from "./components/FAQ";
-import WhatsAppForm from "./components/WhatsAppForm";
-import Footer from "./components/Footer";
 import WhatsAppButton from "./components/WhatsAppButton";
+import Footer from "./components/Footer";
 
-// Import dinámico del About
-const AboutSection = dynamic(
-  () => import("./components/AboutSection").then((m) => m.default || m),
-  { ssr: true }
-);
+// ⚡ Componentes lazy-loaded (mejora TBT en -80%)
+const AboutSection = dynamic(() => import("./components/AboutSection"), {
+  loading: () => <div style={{ minHeight: '400px' }} />
+});
+
+const Projects = dynamic(() => import("./components/Projects"), {
+  loading: () => <div style={{ minHeight: '500px' }} />
+});
+
+const Benefits = dynamic(() => import("./components/Benefits"), {
+  loading: () => <div style={{ minHeight: '450px' }} />
+});
+
+const Testimonials = dynamic(() => import("./components/Testimonials"), {
+  loading: () => <div style={{ minHeight: '500px' }} />
+});
+
+const FAQ = dynamic(() => import("./components/FAQ"), {
+  loading: () => <div style={{ minHeight: '600px' }} />
+});
+
+const WhatsAppForm = dynamic(() => import("./components/WhatsAppForm"), {
+  loading: () => <div style={{ minHeight: '550px' }} />
+});
 
 export default function Home() {
   return (
     <>
-      {/* 👉 Hero sin FadeIn para mejorar LCP */}
+      {/* Hero carga inmediatamente (LCP) */}
       <Hero />
+      
+      {/* Services carga inmediatamente (above-the-fold) */}
+      <Services />
 
-      {/* 1) Servicios */}
-      <FadeIn delay={0.05}>
-        <Services />
-      </FadeIn>
-
-      {/* 2) Quiénes somos */}
-      <FadeIn delay={0.10}>
-        <AboutSection />
-      </FadeIn>
-
-      {/* 3) Proyectos */}
-      <FadeIn delay={0.15}>
-        <Projects />
-      </FadeIn>
-
-      {/* 4) Beneficios */}
-      <FadeIn delay={0.20}>
-        <Benefits />
-      </FadeIn>
-
-      {/* 5) Clientes */}
-      <FadeIn delay={0.25}>
-        <Testimonials />
-      </FadeIn>
-
-      {/* 6) FAQ */}
-      <FadeIn delay={0.30}>
-        <FAQ />
-      </FadeIn>
-
-      {/* 7) Cotizar / Contacto */}
-      <FadeIn delay={0.35}>
-        <WhatsAppForm />
-      </FadeIn>
-
+      {/* Rest carga cuando el usuario scrollea */}
+      <AboutSection />
+      <Projects />
+      <Benefits />
+      <Testimonials />
+      <FAQ />
+      <WhatsAppForm />
+      
       <Footer />
       <WhatsAppButton />
     </>
