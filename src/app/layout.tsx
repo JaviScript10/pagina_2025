@@ -64,8 +64,6 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
         {/* ⚡ Preload imágenes críticas (LCP) */}
-        <link rel="preload" as="image" href="/brand/velocityweb-logo.png" />
-        <link rel="preload" as="image" href="/brand/rayo.png" fetchPriority="high" />
         
         {/* ⚡ Preconnect a dominios externos */}
         <link rel="preconnect" href="https://images.unsplash.com" />

@@ -1,31 +1,53 @@
 ﻿"use client";
-import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
 const projects = [
-  { id: 1, title: "E-commerce Moda", category: "Tienda Online", image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1600&q=80", description: "Tienda online con pasarela de pagos integrada" },
-  { id: 2, title: "Restaurante Gourmet", category: "Landing Page", image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=80", description: "Sitio web con reservas online y menú digital" },
-  { id: 3, title: "App Fitness", category: "Aplicación Web", image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80", description: "Plataforma de entrenamiento personalizado" },
-  { id: 4, title: "Inmobiliaria Premium", category: "Sitio Corporativo", image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1600&q=80", description: "Portal de propiedades con búsqueda avanzada" },
-  { id: 5, title: "Clínica Dental", category: "Sitio Corporativo", image: "https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1600&q=80", description: "Web profesional con sistema de citas" },
-  { id: 6, title: "Tienda de Tecnología", category: "Tienda Online", image: "https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=1600&q=80", description: "E-commerce con carrito y gestión de inventario" },
+  { id: 1, title: "E-commerce Moda", category: "Tienda Online", image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=75", description: "Tienda online con pasarela de pagos integrada" },
+  { id: 2, title: "Restaurante Gourmet", category: "Landing Page", image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=75", description: "Sitio web con reservas online y menú digital" },
+  { id: 3, title: "App Fitness", category: "Aplicación Web", image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=75", description: "Plataforma de entrenamiento personalizado" },
+  { id: 4, title: "Inmobiliaria Premium", category: "Sitio Corporativo", image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=800&q=75", description: "Portal de propiedades con búsqueda avanzada" },
+  { id: 5, title: "Clínica Dental", category: "Sitio Corporativo", image: "https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=800&q=75", description: "Web profesional con sistema de citas" },
+  { id: 6, title: "Tienda de Tecnología", category: "Tienda Online", image: "https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=800&q=75", description: "E-commerce con carrito y gestión de inventario" },
 ];
 
 export default function Gallery() {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [selectedProject, setSelectedProject] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
 
-  // Detectar si es móvil dinámicamente
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 767);
+    const checkMobile = () => setIsMobile(window.innerWidth <= 767);
+    checkMobile();
+    
+    let resizeTimer;
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(checkMobile, 150);
     };
     
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    
-    return () => window.removeEventListener("resize", checkMobile);
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => {
+      window.removeEventListener("resize", onResize);
+      clearTimeout(resizeTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1, rootMargin: "50px" }
+    );
+
+    const section = document.getElementById("gallery");
+    if (section) observer.observe(section);
+
+    return () => observer.disconnect();
   }, []);
 
   const categories = ["Todos", "Landing Page", "Sitio Corporativo", "Tienda Online", "Aplicación Web"];
@@ -38,35 +60,35 @@ export default function Gallery() {
     }
   };
 
-  // Bloquear scroll cuando modal está abierto
   useEffect(() => {
     if (selectedProject && !isMobile) {
-      const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
-        document.body.style.overflow = prev || "";
+        document.body.style.overflow = "";
       };
     }
   }, [selectedProject, isMobile]);
 
-  // Abrir modal SOLO en desktop
   const openProject = (p) => {
-    if (isMobile) return; // 🚫 En móvil no hace nada
+    if (isMobile) return;
     setSelectedProject(p);
   };
 
   return (
     <section
       id="gallery"
+      className={`gallery-section ${isVisible ? "visible" : ""}`}
       style={{
         paddingTop: "6rem",
         paddingBottom: "6rem",
         background: "linear-gradient(to bottom, rgb(15 23 42), rgb(30 41 59))",
         position: "relative",
         overflow: "hidden",
+        opacity: 0,
+        transform: "translateY(20px)",
+        transition: "opacity 0.6s ease, transform 0.6s ease",
       }}
     >
-      {/* Fondo animado suave */}
       <div
         style={{
           position: "absolute",
@@ -88,13 +110,7 @@ export default function Gallery() {
           zIndex: 1,
         }}
       >
-        {/* Título */}
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          style={{ textAlign: "center", marginBottom: "2.5rem" }}
-        >
+        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <h2
             style={{
               fontSize: "2.2rem",
@@ -117,9 +133,8 @@ export default function Gallery() {
           >
             Ejemplos de sitios web desarrollados con tecnología de punta
           </p>
-        </motion.div>
+        </div>
 
-        {/* Filtros */}
         <div
           style={{
             display: "flex",
@@ -130,11 +145,9 @@ export default function Gallery() {
           }}
         >
           {categories.map((cat) => (
-            <motion.button
+            <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
               style={{
                 padding: "0.65rem 1.2rem",
                 background:
@@ -146,26 +159,21 @@ export default function Gallery() {
                 borderRadius: "9999px",
                 fontWeight: 800,
                 cursor: "pointer",
-                transition: "all 0.25s",
+                transition: "all 0.2s",
                 fontSize: "0.95rem",
               }}
             >
               {cat}
-            </motion.button>
+            </button>
           ))}
         </div>
 
-        {/* Grid */}
         <div className="gallery-grid">
           {filteredProjects.map((project, i) => (
-            <motion.div
+            <div
               key={project.id}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.06 }}
-              whileHover={!isMobile ? { y: -6, scale: 1.01 } : {}}
               onClick={() => openProject(project)}
+              className="gallery-card"
               style={{
                 background: "rgba(255,255,255,0.06)",
                 borderRadius: "16px",
@@ -173,10 +181,10 @@ export default function Gallery() {
                 cursor: isMobile ? "default" : "zoom-in",
                 border: "1px solid rgba(255,255,255,0.12)",
                 boxShadow: "0 10px 30px rgba(2, 6, 23, 0.18)",
-                transition: "all 0.25s",
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                animationDelay: `${i * 50}ms`,
               }}
             >
-              {/* Thumb */}
               <div
                 style={{
                   width: "100%",
@@ -197,13 +205,9 @@ export default function Gallery() {
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    transform: "scale(1.02)",
-                    transition: "transform 0.35s ease",
                     display: "block",
                     backgroundColor: "#0b1324",
                   }}
-                  onMouseEnter={(e) => !isMobile && (e.currentTarget.style.transform = "scale(1.08)")}
-                  onMouseLeave={(e) => !isMobile && (e.currentTarget.style.transform = "scale(1.02)")}
                 />
                 <div
                   style={{
@@ -223,7 +227,6 @@ export default function Gallery() {
                 </div>
               </div>
 
-              {/* Meta */}
               <div style={{ padding: "12px 14px 16px" }}>
                 <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff", margin: "0 0 6px" }}>
                   {project.title}
@@ -232,21 +235,16 @@ export default function Gallery() {
                   {project.description}
                 </p>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
 
-        {/* Modal (SOLO DESKTOP) */}
         {!isMobile && selectedProject && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+          <div
             className="gallery-modal-overlay"
             onClick={() => setSelectedProject(null)}
           >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="gallery-modal"
             >
@@ -268,13 +266,17 @@ export default function Gallery() {
               <button onClick={() => setSelectedProject(null)} className="gallery-modal-close" aria-label="Cerrar">
                 ✕
               </button>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
       </div>
 
       <style jsx global>{`
-        /* Grid */
+        .gallery-section.visible {
+          opacity: 1 !important;
+          transform: translateY(0) !important;
+        }
+
         .gallery-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -291,7 +293,29 @@ export default function Gallery() {
           }
         }
 
-        /* Overlay modal */
+        .gallery-card {
+          animation: fadeInUp 0.4s ease forwards;
+          opacity: 0;
+        }
+        
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(15px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (hover: hover) {
+          .gallery-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 40px rgba(6, 182, 212, 0.2);
+          }
+        }
+
         .gallery-modal-overlay {
           position: fixed;
           inset: 0;
@@ -302,6 +326,12 @@ export default function Gallery() {
           align-items: center;
           justify-content: center;
           padding: 20px;
+          animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
 
         .gallery-modal {
@@ -315,6 +345,18 @@ export default function Gallery() {
           display: flex;
           flex-direction: column;
           position: relative;
+          animation: scaleIn 0.25s ease;
+        }
+
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
         }
 
         .gallery-modal-img-wrap {

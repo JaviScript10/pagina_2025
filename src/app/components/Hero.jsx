@@ -204,6 +204,7 @@ export default function Hero() {
             sizes="(max-width: 520px) 130px, (max-width: 900px) 180px, 260px"
             className="ray-img"
             priority
+            fetchPriority="high"
             quality={85}
             style={{ width: '100%', height: 'auto' }}
           />
