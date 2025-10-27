@@ -69,7 +69,7 @@ export default function Header() {
     <>
       <a className="chip" href="#services" onClick={handleAnchor}>Servicios</a>
       <a className="chip" href="#about" onClick={handleAnchor}>Quiénes somos</a>
-      <a className="chip" href="#gallery" onClick={handleAnchor}>Proyectos</a>
+      <a className="chip" href="#projects" onClick={handleAnchor}>Proyectos</a>
       <a className="chip" href="#benefits" onClick={handleAnchor}>Beneficios</a>
       <a className="chip" href="#testimonials" onClick={handleAnchor}>Clientes</a>
       <a className="chip" href="#faq" onClick={handleAnchor}>FAQ</a>

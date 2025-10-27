@@ -1,22 +1,33 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // ⚡ Webpack config original
-  webpack: (config) => {
-    // Ignora errores de watchOptions en rutas de red
+  // ✅ Webpack optimizado
+  webpack: (config, { isServer }) => {
     config.watchOptions = {
       ignored: ['**/node_modules/**', '**/.git/**'],
       poll: 1000,
     };
+
+    // ✅ Optimización adicional: tree shaking agresivo
+    if (!isServer) {
+      config.optimization = {
+        ...config.optimization,
+        usedExports: true,
+        sideEffects: false,
+      };
+    }
+
     return config;
   },
 
-  // ⚡ Optimización de imágenes
+  // ✅ Optimización de imágenes NIVEL NASA
   images: {
-    formats: ['image/avif', 'image/webp'], // Formatos modernos
+    formats: ['image/avif', 'image/webp'], // Formatos modernos prioritarios
     minimumCacheTTL: 31536000, // Cache de 1 año
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920], // Tamaños optimizados
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    dangerouslyAllowSVG: false, // Seguridad
+    contentDispositionType: 'inline',
     remotePatterns: [
       {
         protocol: 'https',
@@ -24,32 +35,57 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+    // ✅ Calidad optimizada para balance perfecto
+    unoptimized: false,
   },
 
-  // ⚡ Compresión gzip/brotli
+  // ✅ Compresión máxima
   compress: true,
 
-  // ⚡ Ocultar header "X-Powered-By: Next.js"
+  // ✅ Sin header innecesario
   poweredByHeader: false,
 
-  // ⚡ Headers de seguridad y performance
+  // ✅ Modo estricto
+  reactStrictMode: true,
+
+  // ✅ Sin source maps en producción (más rápido)
+  productionBrowserSourceMaps: false,
+
+  // ✅ Experimental features para máximo performance
+  experimental: {
+    optimizeCss: true, // CSS crítico inline
+    optimizePackageImports: ['@headlessui/react', '@heroicons/react'], // Tree-shaking
+    
+    // Turbopack en desarrollo (más rápido)
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+  },
+
+  // ✅ Headers de seguridad y performance NIVEL NASA
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
-          // Seguridad
+          // Performance hints
           {
             key: 'X-DNS-Prefetch-Control',
             value: 'on'
           },
           {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload'
-          },
-          {
             key: 'X-Content-Type-Options',
             value: 'nosniff'
+          },
+          // Seguridad
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload'
           },
           {
             key: 'X-Frame-Options',
@@ -61,15 +97,15 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin'
+            value: 'strict-origin-when-cross-origin'
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()'
-          }
+            value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+          },
         ],
       },
-      // Cache agresivo para assets estáticos
+      // ✅ Cache inmutable para assets estáticos
       {
         source: '/brand/:path*',
         headers: [
@@ -79,29 +115,37 @@ const nextConfig: NextConfig = {
           }
         ],
       },
-      // Preconnect hints
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          }
+        ],
+      },
+      // ✅ Preconnect a dominios externos críticos
       {
         source: '/',
         headers: [
           {
             key: 'Link',
-            value: '<https://images.unsplash.com>; rel=preconnect; crossorigin'
+            value: '<https://images.unsplash.com>; rel=preconnect; crossorigin, <https://fonts.googleapis.com>; rel=preconnect; crossorigin'
           }
         ],
       }
     ];
   },
 
-  // ⚡ Optimización de producción
-  productionBrowserSourceMaps: false, // No generar source maps en prod
-  reactStrictMode: true, // Modo estricto de React
-  // swcMinify ya viene por defecto en Next.js 15+
+  // ✅ Redirects optimizados (si los necesitas)
+  async redirects() {
+    return [];
+  },
 
-  // ⚡ Experimental (opcional - descomentar si quieres probar)
-  // experimental: {
-  //   optimizeCss: true, // Optimizar CSS crítico
-  //   optimizePackageImports: ['lucide-react'], // Tree-shaking agresivo
-  // },
+  // ✅ Rewrites optimizados (si los necesitas)
+  async rewrites() {
+    return [];
+  },
 };
 
 export default nextConfig;

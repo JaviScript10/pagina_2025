@@ -1,53 +1,53 @@
-﻿"use client";
+import dynamic from 'next/dynamic';
+import Hero from './components/Hero';
 
-import dynamic from "next/dynamic";
-import Hero from "./components/Hero";
-import Services from "./components/Services";
-import WhatsAppButton from "./components/WhatsAppButton";
-import Footer from "./components/Footer";
-
-// ⚡ Componentes lazy-loaded (mejora TBT en -80%)
-const AboutSection = dynamic(() => import("./components/AboutSection"), {
-  loading: () => <div style={{ minHeight: '400px' }} />
+const Services = dynamic(() => import('./components/Services'), {
+  loading: () => <div style={{ minHeight: '400px' }} />,
 });
 
-const Projects = dynamic(() => import("./components/Projects"), {
-  loading: () => <div style={{ minHeight: '500px' }} />
+const Benefits = dynamic(() => import('./components/Benefits'), {
+  loading: () => <div style={{ minHeight: '400px' }} />,
 });
 
-const Benefits = dynamic(() => import("./components/Benefits"), {
-  loading: () => <div style={{ minHeight: '450px' }} />
+const Gallery = dynamic(() => import('./components/Gallery'), {
+  loading: () => <div style={{ minHeight: '400px' }} />,
 });
 
-const Testimonials = dynamic(() => import("./components/Testimonials"), {
-  loading: () => <div style={{ minHeight: '500px' }} />
+const AboutSection = dynamic(() => import('./components/AboutSection'), {
+  loading: () => <div style={{ minHeight: '400px' }} />,
 });
 
-const FAQ = dynamic(() => import("./components/FAQ"), {
-  loading: () => <div style={{ minHeight: '600px' }} />
+const Testimonials = dynamic(() => import('./components/Testimonials'), {
+  loading: () => <div style={{ minHeight: '400px' }} />,
 });
 
-const WhatsAppForm = dynamic(() => import("./components/WhatsAppForm"), {
-  loading: () => <div style={{ minHeight: '550px' }} />
+const FAQ = dynamic(() => import('./components/FAQ'), {
+  loading: () => <div style={{ minHeight: '400px' }} />,
+});
+
+const WhatsAppForm = dynamic(() => import('./components/WhatsAppForm'), {
+  loading: () => <div style={{ minHeight: '400px' }} />,
+});
+
+const Footer = dynamic(() => import('./components/Footer'), {
+  loading: () => <div style={{ minHeight: '200px' }} />,
+});
+
+const WhatsAppButton = dynamic(() => import('./components/WhatsAppButton'), {
+  loading: () => <div style={{ minHeight: '80px' }} />,
 });
 
 export default function Home() {
   return (
     <>
-      {/* Hero carga inmediatamente (LCP) */}
       <Hero />
-      
-      {/* Services carga inmediatamente (above-the-fold) */}
       <Services />
-
-      {/* Rest carga cuando el usuario scrollea */}
       <AboutSection />
-      <Projects />
+      <Gallery />
       <Benefits />
       <Testimonials />
       <FAQ />
       <WhatsAppForm />
-      
       <Footer />
       <WhatsAppButton />
     </>

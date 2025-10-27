@@ -17,8 +17,6 @@ export default function Navbar() {
 
   const menuItems = [
     { name: 'Servicios', id: 'services' },
-    { name: 'Quiénes somos', id: 'about' },
-    { name: 'Proyectos', id: 'gallery' },
     { name: 'Beneficios', id: 'benefits' },
     { name: 'Testimonios', id: 'testimonials' },
     { name: 'FAQ', id: 'faq' }
