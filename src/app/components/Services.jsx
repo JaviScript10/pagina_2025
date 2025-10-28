@@ -133,7 +133,7 @@ export default function Services() {
                                 <a href="#cotizar" className="btn-cta">
                                     Cotizar ahora
                                 </a>
-                                <a href="#projects" className="btn-ghost-dark">
+                                <a href="#gallery" className="btn-ghost-dark">
                                     Ver ejemplos
                                 </a>
                             </div>
