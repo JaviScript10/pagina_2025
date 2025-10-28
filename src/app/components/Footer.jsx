@@ -54,11 +54,6 @@ export default function Footer() {
                   📱 +56 9 3720 4965
                 </a>
               </li>
-              <li>
-                <a href="https://wa.me/56937204965" target="_blank" rel="noopener noreferrer" className="contact-link">
-                  💬 WhatsApp directo
-                </a>
-              </li>
             </ul>
           </div>
         </div>

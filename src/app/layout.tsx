@@ -2,7 +2,6 @@
 import "./globals.css";
 import Header from "./components/Header";
 import ChatDock from "./components/ChatDock";
-import CursorMount from "./components/CursorMount";
 import { Inter } from "next/font/google";
 
 // ✅ Fuente optimizada con next/font
@@ -64,7 +63,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
         {/* ⚡ Preload imágenes críticas (LCP) */}
-        
+
         {/* ⚡ Preconnect a dominios externos */}
         <link rel="preconnect" href="https://images.unsplash.com" />
         <link rel="dns-prefetch" href="https://images.unsplash.com" />
@@ -73,10 +72,6 @@ export default function RootLayout({
       <body id="top" className={`${inter.className} antialiased`}>
         {/* Header global */}
         <Header />
-
-        {/* Cursor visual controlado por el Client Component */}
-        <div id="cursor" className="custom-cursor" aria-hidden="true" />
-        <CursorMount />
 
         {/* Contenido principal */}
         {children}

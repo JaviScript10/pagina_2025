@@ -1,5 +1,16 @@
 ﻿@import 'tailwindcss';
 
+* {
+  cursor: auto !important;
+}
+
+a,
+button,
+[role="button"] {
+  cursor: pointer !important;
+}
+
+
 /* ==== Arreglo anti-scroll lateral / Android ==== */
 :root,
 html,
@@ -1278,11 +1289,6 @@ a:hover::after {
 }
 
 /* en globals.css */
-@media (max-width: 920px) {
-  #cursor {
-    display: none !important;
-  }
-}
 
 /* Cursor intergaláctico */
 .custom-cursor {
@@ -1322,11 +1328,6 @@ a:hover::after {
   transition: transform .04s linear
 }
 
-@media (max-width:920px) {
-  #cursor {
-    display: none !important
-  }
-}
 
 /* Smooth scroll en toda la página */
 html {
