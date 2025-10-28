@@ -23,7 +23,7 @@ export default function Hero() {
     if (!canvas) return;
     if (mqReduced?.matches) return;
 
-    const ctx = canvas.getContext("2d", { 
+    const ctx = canvas.getContext("2d", {
       alpha: true,
       desynchronized: true,
       willReadFrequently: false
@@ -102,7 +102,7 @@ export default function Hero() {
 
     const loop = (t) => {
       if (!runningRef.current) return;
-      
+
       const elapsed = t - lastFrame.current;
       if (elapsed < FRAME_MS) {
         rafId.current = requestAnimationFrame(loop);
@@ -121,13 +121,13 @@ export default function Hero() {
       ctx.fillRect(0, 0, w, h);
 
       ctx.globalCompositeOperation = "lighter";
-      
+
       for (let i = 0; i < blobs.length; i++) {
         const b = blobs[i];
         b.phase += b.speed;
         b.x += Math.cos(b.phase + i) * b.ax + mouse.current.vx * 0.02;
         b.y += Math.sin(b.phase + i) * b.ay + mouse.current.vy * 0.02;
-        
+
         if (b.x < -b.r) b.x = w + b.r;
         if (b.x > w + b.r) b.x = -b.r;
         if (b.y < -b.r) b.y = h + b.r;
@@ -142,13 +142,13 @@ export default function Hero() {
         ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fill();
       }
-      
+
       ctx.globalCompositeOperation = "source-over";
 
       const repelBase = mqCoarse?.matches ? 0 : 0.006;
       ctx.shadowBlur = 4;
       ctx.shadowColor = "rgba(56,189,248,0.4)";
-      
+
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i];
         ctx.strokeStyle = `rgba(163,230,255,${p.o})`;
@@ -227,7 +227,7 @@ export default function Hero() {
             </span>
             Cotizar Proyecto
           </a>
-          <a href="#projects" className="btn wire">★ Proyectos</a>
+          <a href="#gallery" className="btn wire">★ Proyectos</a>
         </div>
 
         <ul className="badges">
